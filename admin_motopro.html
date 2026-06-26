@@ -248,8 +248,9 @@ function render(){
     const row=document.createElement('div'); row.className='corte-row';
     const est=document.createElement('div'); est.className='estado '+c._estado; est.textContent=ICON[c._estado];
     const mid=document.createElement('div'); mid.className='corte-mid';
-    mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+
-      'EF '+fmt(c.efectivo)+' · TD '+fmt(td)+' · TC '+fmt(tc)+'</div>';
+    let l2='EF '+fmt(c.efectivo)+' · TD '+fmt(td)+' · TC '+fmt(tc);
+    if(Number(c.transferencia)>0) l2+=' · Tr '+fmt(c.transferencia);
+    mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+l2+'</div>';
     const tot=document.createElement('div'); tot.className='corte-tot';
     tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div><div class="s">'+(c.n_vouchers||0)+' vouchers</div>';
     const chev=document.createElement('div'); chev.className='chev'; chev.textContent='▸';

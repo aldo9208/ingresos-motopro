@@ -307,7 +307,7 @@ $('btnGuardar').addEventListener('click', async ()=>{
     const payload={
       action:'guardar_corte',
       corte:{ id_corte:c.lote, fecha:c.fechaISO, sucursal:'Moto Pro',
-              efectivo:c.totEF, debito:c.totTD, credito:c.totTC, total:c.total, capturado_por:nombre },
+              efectivo:c.totEF, debito:c.totTD, credito:c.totTC, transferencia:c.totTR, total:c.total, capturado_por:nombre },
       ventas:c.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto, voucherB64:v.voucher||'' }))
     };
     try{ const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)}); const data=await res.json(); data.ok?ok++:fail.push(c.lote); }
