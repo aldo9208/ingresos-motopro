@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingresos Moto Pro · Caja</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
+    --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--green-soft:#E5F1EA;
+    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;padding-bottom:96px}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .wrap{max-width:560px;margin:0 auto;padding:0 16px}
+  header{background:var(--ink);color:#fff;padding:18px 0 16px}
+  header .wrap{display:flex;align-items:center;gap:12px}
+  .logo{width:38px;height:38px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:0 0 auto;font-weight:800;font-size:18px;color:#19170F;letter-spacing:-1px}
+  header h1{font-size:18px;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+  header .sub{font-size:12px;color:#B8B2A4;font-weight:500;margin-top:1px}
+
+  section{margin-top:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--amber);margin-bottom:10px;display:flex;align-items:center;gap:7px}
+  .eyebrow .n{background:var(--amber);color:#19170F;width:18px;height:18px;border-radius:5px;display:grid;place-items:center;font-size:11px}
+
+  .drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:26px 16px;text-align:center;cursor:pointer;transition:.15s;background:#FCFBF8}
+  .drop:hover,.drop:focus-visible{border-color:var(--amber);background:var(--amber-soft);outline:none}
+  .drop .ic{font-size:30px;line-height:1}
+  .drop b{display:block;margin-top:8px;font-size:15px}
+  .drop small{color:var(--ink-soft);font-size:12.5px}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
+
+  .corte-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .corte-head .fecha{font-size:19px;font-weight:700;letter-spacing:-.3px}
+  .corte-head .lote{font-size:12px;color:var(--ink-soft)}
+  .pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--ink);color:#fff;white-space:nowrap}
+  .totales{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .tot{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:#FCFBF8}
+  .tot .lbl{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
+  .tot .val{font-size:17px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+  .tot.ef{border-left:3px solid var(--green)}
+  .tot.td{border-left:3px solid var(--blue)}
+  .tot.tc{border-left:3px solid var(--amber)}
+  .totsum{margin-top:10px;font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line)}
+  .totsum b{color:var(--ink);font-size:15px}
+
+  .venta{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .venta:last-child{border-bottom:none}
+  .tag{flex:0 0 auto;width:42px;height:42px;border-radius:9px;display:grid;place-items:center;font-size:11px;font-weight:800;letter-spacing:.3px}
+  .tag.tc{background:var(--amber-soft);color:var(--amber)}
+  .tag.td{background:var(--blue-soft);color:var(--blue)}
+  .venta .info{flex:1;min-width:0}
+  .venta .monto{font-weight:700;font-size:16px;letter-spacing:-.3px}
+  .venta .meta{font-size:12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .vbtn{flex:0 0 auto;border:1.5px solid var(--amber);color:var(--amber);background:#fff;font-weight:700;font-size:12.5px;padding:8px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap}
+  .vbtn:hover{background:var(--amber-soft)}
+  .thumb{flex:0 0 auto;width:42px;height:42px;border-radius:9px;object-fit:cover;border:1px solid var(--line)}
+  .empty{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:18px 8px}
+  .toggle-all{background:none;border:none;color:var(--amber);font-weight:700;font-size:12.5px;cursor:pointer;padding:8px 0 2px}
+
+  .field{margin-bottom:11px}
+  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:5px}
+  .field input{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit;background:#FCFBF8;color:var(--ink)}
+  .field input:focus{outline:2px solid var(--amber);border-color:transparent;background:#fff}
+
+  .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:12px 0;z-index:20}
+  .savebar .wrap{display:flex;align-items:center;gap:12px}
+  .savebtn{flex:1;background:var(--amber);color:#19170F;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s}
+  .savebtn:disabled{opacity:.5;cursor:not-allowed}
+  .savebtn.ok{background:var(--green);color:#fff}
+
+  .config{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-top:18px}
+  .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:22px;line-height:1.5}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">MP</div>
+    <div>
+      <h1>Ingresos Moto Pro</h1>
+      <div class="sub">Caja · corte del día y vouchers</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="avisoConfig" class="config hidden">⚠️ Falta pegar la liga del backend en el archivo (API_URL). Avísale a Aldo.</div>
+
+  <section>
+    <div class="card">
+      <div class="eyebrow"><span class="n">1</span> Cargar corte de SAIT</div>
+      <label class="drop" tabindex="0">
+        <input type="file" id="fileSait" accept=".xlsx,.xls">
+        <div class="ic">⬆</div>
+        <b>Subir movimientos de caja</b>
+        <small>El Excel que exportas de SAIT</small>
+      </label>
+    </div>
+  </section>
+
+  <section id="secResumen" class="hidden">
+    <div class="card">
+      <div class="eyebrow"><span class="n">2</span> Resumen del corte</div>
+      <div class="corte-head">
+        <div><div class="fecha" id="rFecha">—</div><div class="lote" id="rLote">—</div></div>
+        <span class="pill" id="rOps">—</span>
+      </div>
+      <div class="totales">
+        <div class="tot ef"><div class="lbl">Efectivo</div><div class="val num" id="rEF">$0</div></div>
+        <div class="tot td"><div class="lbl">Débito</div><div class="val num" id="rTD">$0</div></div>
+        <div class="tot tc"><div class="lbl">Crédito</div><div class="val num" id="rTC">$0</div></div>
+      </div>
+      <div class="totsum"><span>Total de ventas del día</span><b class="num" id="rTotal">$0</b></div>
+    </div>
+  </section>
+
+  <section id="secVouchers" class="hidden">
+    <div class="card">
+      <div class="eyebrow"><span class="n">3</span> Vouchers de tarjeta</div>
+      <div id="listaTarjeta"></div>
+    </div>
+  </section>
+
+  <section id="secCaptura" class="hidden">
+    <div class="card">
+      <div class="eyebrow"><span class="n">4</span> ¿Quién captura?</div>
+      <div class="field">
+        <input type="text" id="capturadoPor" placeholder="Tu nombre (ej. Marisol)">
+      </div>
+    </div>
+  </section>
+
+  <section id="secDetalle" class="hidden">
+    <button class="toggle-all" id="btnDetalle">▸ Ver todas las ventas del día</button>
+    <div class="card hidden" id="detalleCard" style="margin-top:8px"><div id="listaTodas"></div></div>
+  </section>
+
+  <div class="footnote" id="foot"></div>
+</div>
+
+<div class="savebar hidden" id="savebar">
+  <div class="wrap">
+    <button class="savebtn" id="btnGuardar">Guardar corte</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// CONFIG — pega aquí la liga /exec del backend (Apps Script)
+const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
+// ============================================================
+
+const $ = id => document.getElementById(id);
+let sait=null;
+const fmt = n => '$' + (n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+
+if(!API_URL) $('avisoConfig').classList.remove('hidden');
+
+function serialToFecha(s){
+  if(typeof s !== 'number') return String(s||'').trim();
+  const d = new Date(Date.UTC(1899,11,30) + Math.round(s)*86400000);
+  const txt = d.toLocaleDateString('es-MX',{weekday:'long',day:'numeric',month:'long',year:'numeric',timeZone:'UTC'});
+  return txt.charAt(0).toUpperCase()+txt.slice(1);
+}
+function fechaISO(s){
+  if(typeof s !== 'number') return String(s||'').trim();
+  const d = new Date(Date.UTC(1899,11,30) + Math.round(s)*86400000);
+  return d.toISOString().slice(0,10);
+}
+function clasifica(t){ t=String(t||'').trim().toUpperCase(); return ['EF','TC','TD','FONDO'].includes(t)?t:(t||'OTRO'); }
+
+$('fileSait').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ try{ parseSait(ev.target.result); }catch(err){ alert('No pude leer ese archivo. Revisa que sea el Excel de movimientos de SAIT.'); console.error(err);} };
+  r.readAsArrayBuffer(f);
+});
+
+function parseSait(buf){
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==='folio'));
+  if(hi<0) throw new Error('sin header');
+  const h=rows[hi].map(c=>String(c).trim().toLowerCase());
+  const ix=n=>h.indexOf(n);
+  const iF=ix('folio'),iFe=ix('fecha'),iH=ix('hora'),iC=ix('corte'),iT=ix('tipo'),iCl=ix('cliente'),iI=ix('importe');
+  const data=rows.slice(hi+1).filter(r=>r.length && String(r[iF]).trim()!=='');
+  sait={fecha:'',fechaISO:'',lote:'',ventas:[],tarjeta:[],totEF:0,totTD:0,totTC:0,ops:0};
+  let fr=null;
+  data.forEach(r=>{
+    const cat=clasifica(r[iT]);
+    if(cat==='FONDO'){ if(fr===null) fr=r[iFe]; return; }
+    if(fr===null) fr=r[iFe];
+    const v={folio:String(r[iF]).trim(),hora:String(r[iH]||'').trim(),lote:String(r[iC]||'').trim(),cat,cliente:String(r[iCl]||'').trim()||'Cliente mostrador',monto:Number(r[iI])||0,voucher:null};
+    sait.ventas.push(v); sait.lote=v.lote||sait.lote;
+    if(cat==='EF') sait.totEF+=v.monto; else if(cat==='TD') sait.totTD+=v.monto; else if(cat==='TC') sait.totTC+=v.monto;
+  });
+  sait.fecha=serialToFecha(fr); sait.fechaISO=fechaISO(fr); sait.ops=sait.ventas.length;
+  sait.tarjeta=sait.ventas.filter(v=>v.cat==='TC'||v.cat==='TD');
+  render();
+}
+
+function render(){
+  $('rFecha').textContent=sait.fecha||'—';
+  $('rLote').textContent='Corte '+(sait.lote||'—');
+  $('rOps').textContent=sait.ops+' ventas';
+  $('rEF').textContent=fmt(sait.totEF);
+  $('rTD').textContent=fmt(sait.totTD);
+  $('rTC').textContent=fmt(sait.totTC);
+  $('rTotal').textContent=fmt(sait.totEF+sait.totTD+sait.totTC);
+  const cont=$('listaTarjeta'); cont.innerHTML='';
+  if(sait.tarjeta.length===0) cont.innerHTML='<div class="empty">No hubo ventas con tarjeta en este corte.</div>';
+  else sait.tarjeta.forEach(v=>cont.appendChild(ventaRow(v,true)));
+  const all=$('listaTodas'); all.innerHTML='';
+  sait.ventas.forEach(v=>all.appendChild(ventaRow(v,false)));
+  ['secResumen','secVouchers','secCaptura','secDetalle'].forEach(s=>$(s).classList.remove('hidden'));
+  $('savebar').classList.remove('hidden');
+  resetBtn();
+}
+
+function ventaRow(v,conVoucher){
+  const row=document.createElement('div'); row.className='venta';
+  const tg=document.createElement('div');
+  const cls=v.cat==='TC'?'tc':(v.cat==='TD'?'td':'');
+  tg.className='tag '+cls; tg.textContent=v.cat;
+  if(v.cat==='EF'){ tg.style.background='var(--green-soft)'; tg.style.color='var(--green)'; }
+  row.appendChild(tg);
+  const info=document.createElement('div'); info.className='info';
+  info.innerHTML=`<div class="monto num">${fmt(v.monto)}</div><div class="meta">#${v.folio} · ${v.hora} · ${v.cliente}</div>`;
+  row.appendChild(info);
+  if(conVoucher){
+    if(v.voucher){
+      const img=document.createElement('img'); img.className='thumb'; img.src=v.voucher; img.title='Tocar para reemplazar';
+      img.onclick=()=>pickVoucher(v); row.appendChild(img);
+    } else {
+      const btn=document.createElement('button'); btn.className='vbtn'; btn.innerHTML='📷 Voucher';
+      btn.onclick=()=>pickVoucher(v); row.appendChild(btn);
+    }
+  }
+  return row;
+}
+
+function pickVoucher(v){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, dataUrl=>{ v.voucher=dataUrl; render(); }); };
+  inp.click();
+}
+
+// Compresión a JPEG ~200KB máx, lado mayor 1280px
+function comprimirFoto(file, cb){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      let {width:w,height:h}=img; const max=1280;
+      if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
+      else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      let q=0.7, out=c.toDataURL('image/jpeg',q);
+      while(out.length>270000 && q>0.4){ q-=0.1; out=c.toDataURL('image/jpeg',q); }
+      cb(out);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+$('btnDetalle').addEventListener('click',()=>{
+  const c=$('detalleCard'); const open=c.classList.toggle('hidden');
+  $('btnDetalle').textContent=(open?'▸':'▾')+' '+(open?'Ver todas las ventas del día':'Ocultar ventas');
+});
+
+function resetBtn(){ const b=$('btnGuardar'); b.disabled=false; b.classList.remove('ok'); b.textContent='Guardar corte'; }
+
+$('btnGuardar').addEventListener('click', async ()=>{
+  if(!sait) return;
+  if(!API_URL){ alert('Falta configurar la liga del backend (API_URL).'); return; }
+  const faltan = sait.tarjeta.filter(v=>!v.voucher).length;
+  if(faltan>0 && !confirm('Faltan '+faltan+' voucher(s) por foto. ¿Guardar de todos modos?')) return;
+
+  const b=$('btnGuardar'); b.disabled=true; b.textContent='Guardando…';
+  const payload={
+    action:'guardar_corte',
+    corte:{ id_corte:sait.lote, fecha:sait.fechaISO, sucursal:'Moto Pro',
+            efectivo:sait.totEF, debito:sait.totTD, credito:sait.totTC,
+            total:sait.totEF+sait.totTD+sait.totTC, capturado_por:$('capturadoPor').value.trim() },
+    ventas: sait.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto,
+                                  voucherB64: v.voucher || '' }))
+  };
+  try{
+    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify(payload) });
+    const data = await res.json();
+    if(data.ok){
+      b.classList.add('ok'); b.textContent='✓ Guardado ('+data.vouchers+' vouchers)';
+      $('foot').textContent='Corte '+data.id_corte+' guardado correctamente.';
+    } else {
+      b.disabled=false; b.textContent='Reintentar'; alert('Error del backend: '+data.error);
+    }
+  }catch(err){
+    b.disabled=false; b.textContent='Reintentar'; alert('No se pudo conectar. Revisa tu señal e inténtalo de nuevo.'); console.error(err);
+  }
+});
+</script>
+</body>
+</html>

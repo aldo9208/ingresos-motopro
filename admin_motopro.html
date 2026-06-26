@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingresos Moto Pro · Admin</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
+    --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--green-soft:#E5F1EA;
+    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;--gray-soft:#F0EEE8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;padding-bottom:48px}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .wrap{max-width:760px;margin:0 auto;padding:0 16px}
+  header{background:var(--ink);color:#fff;padding:18px 0 16px}
+  header .wrap{display:flex;align-items:center;gap:12px}
+  .logo{width:38px;height:38px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:0 0 auto;font-weight:800;font-size:18px;color:#19170F;letter-spacing:-1px}
+  header h1{font-size:18px;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+  header .sub{font-size:12px;color:#B8B2A4;font-weight:500;margin-top:1px}
+
+  section{margin-top:18px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--amber);margin-bottom:12px}
+
+  .drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:18px 16px;text-align:center;cursor:pointer;transition:.15s;background:#FCFBF8}
+  .drop:hover{border-color:var(--amber);background:var(--amber-soft)}
+  .drop .ic{font-size:22px}
+  .drop b{display:block;margin-top:6px;font-size:15px}
+  .drop small{color:var(--ink-soft);font-size:12.5px}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+
+  .topbar{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);font-weight:700;font-size:13px;padding:8px 13px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .btn:hover{background:var(--gray-soft)}
+  .btn.amber{background:var(--amber);color:#19170F;border-color:transparent}
+
+  .mes-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+  .mes-grid .b{border:1px solid var(--line);border-radius:10px;padding:10px;background:#FCFBF8}
+  .mes-grid .b .l{font-size:10.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px}
+  .mes-grid .b .v{font-size:16px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+  .mes-grid .b.green{background:var(--green-soft);border-color:transparent}
+  .mes-grid .b.green .v{color:var(--green)}
+  @media(max-width:560px){ .mes-grid{grid-template-columns:repeat(2,1fr)} }
+
+  .corte{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:#fff}
+  .corte-row{display:flex;align-items:center;gap:12px;padding:13px 14px;cursor:pointer}
+  .corte-row:hover{background:#FCFBF8}
+  .estado{flex:0 0 auto;width:34px;height:34px;border-radius:9px;display:grid;place-items:center;font-size:16px;font-weight:800}
+  .estado.ok{background:var(--green-soft);color:var(--green)}
+  .estado.pend{background:var(--red-soft);color:var(--red)}
+  .estado.nt{background:var(--gray-soft);color:var(--ink-soft)}
+  .estado.wait{background:var(--amber-soft);color:var(--amber)}
+  .corte-mid{flex:1;min-width:0}
+  .corte-mid .l1{font-weight:700;font-size:14.5px}
+  .corte-mid .l2{font-size:12px;color:var(--ink-soft)}
+  .corte-tot{text-align:right;flex:0 0 auto}
+  .corte-tot .t{font-weight:700;font-size:15px}
+  .corte-tot .s{font-size:11.5px;color:var(--ink-soft)}
+  .chev{flex:0 0 auto;color:var(--ink-soft);font-size:13px;width:14px}
+
+  .detalle{border-top:1px solid var(--line);padding:12px 14px;background:#FCFBF8;display:none}
+  .detalle.open{display:block}
+  .drow{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+  .drow:last-child{border-bottom:none}
+  .tag{flex:0 0 auto;width:34px;height:26px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:800}
+  .tag.tc{background:var(--amber-soft);color:var(--amber)}
+  .tag.td{background:var(--blue-soft);color:var(--blue)}
+  .tag.ef{background:var(--green-soft);color:var(--green)}
+  .drow .dm{flex:1;font-size:13px}
+  .drow .dmonto{font-weight:700;font-size:14px}
+  .vsmall{border:1px solid var(--amber);color:var(--amber);background:#fff;font-weight:700;font-size:11.5px;padding:5px 9px;border-radius:7px;cursor:pointer}
+  .conc-line{display:flex;gap:8px;align-items:center;font-size:12.5px;margin-bottom:8px;padding:7px 10px;border-radius:8px}
+  .conc-line.ok{background:var(--green-soft);color:var(--green)}
+  .conc-line.bad{background:var(--red-soft);color:var(--red)}
+
+  .estado-leyenda{font-size:11.5px;color:var(--ink-soft);margin-top:8px;display:flex;gap:14px;flex-wrap:wrap}
+  .estado-leyenda span{display:flex;align-items:center;gap:5px}
+  .dot{width:10px;height:10px;border-radius:3px;display:inline-block}
+
+  .loading{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:24px 8px}
+  .config{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-top:18px}
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;place-items:center;z-index:50;padding:20px}
+  .modal.open{display:grid}
+  .modal img{max-width:100%;max-height:85vh;border-radius:10px}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">MP</div>
+    <div>
+      <h1>Ingresos Moto Pro · Admin</h1>
+      <div class="sub">Conciliación de tarjetas con BBVA</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="avisoConfig" class="config hidden">⚠️ Falta configurar la liga del backend (API_URL).</div>
+
+  <section>
+    <div class="card">
+      <div class="eyebrow">1 · Subir movimientos de BBVA</div>
+      <label class="drop" tabindex="0">
+        <input type="file" id="fileBBVA" accept=".xlsx,.xls">
+        <div class="ic">🏦</div>
+        <b>Subir estado de cuenta</b>
+        <small>La app toma solo las ventas con terminal (Moto Pro)</small>
+      </label>
+      <div id="resumenBBVA" class="hidden">
+        <div class="mes-grid" style="margin-top:14px">
+          <div class="b"><div class="l">Débito</div><div class="v num" id="mTD">$0</div></div>
+          <div class="b"><div class="l">Crédito</div><div class="v num" id="mTC">$0</div></div>
+          <div class="b"><div class="l">Comisión + IVA</div><div class="v num" id="mCom">$0</div></div>
+          <div class="b green"><div class="l">Neto recibido</div><div class="v num" id="mNeto">$0</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
+      <div class="topbar">
+        <div class="eyebrow" style="margin:0;flex:1">2 · Cortes registrados</div>
+        <button class="btn" id="btnRefrescar">↻ Refrescar</button>
+      </div>
+      <div id="listaCortes"><div class="loading">Cargando cortes…</div></div>
+      <div class="estado-leyenda">
+        <span><i class="dot" style="background:var(--green)"></i> Conciliado</span>
+        <span><i class="dot" style="background:var(--red)"></i> No aparece en banco</span>
+        <span><i class="dot" style="background:var(--amber)"></i> Sube BBVA para conciliar</span>
+        <span><i class="dot" style="background:var(--ink-soft)"></i> Sin tarjeta</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div class="modal" id="modal"><img id="modalImg" src=""></div>
+
+<script>
+// ============================================================
+const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
+// ============================================================
+
+const $ = id => document.getElementById(id);
+let cortes=[], ventasPorCorte={}, bbva=null;
+const fmt = n => '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const near = (a,b) => Math.abs(Number(a)-Number(b)) <= 0.01;
+
+if(!API_URL) $('avisoConfig').classList.remove('hidden');
+
+// ---- Cargar cortes del backend ----
+async function cargarCortes(){
+  $('listaCortes').innerHTML='<div class="loading">Cargando cortes…</div>';
+  try{
+    const res = await fetch(API_URL + '?action=obtener_cortes&con_ventas=1');
+    const data = await res.json();
+    if(!data.ok) throw new Error(data.error||'error');
+    cortes = (data.cortes||[]).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)));
+    ventasPorCorte = {};
+    (data.ventas||[]).forEach(v=>{
+      const k = String(v.id_corte);
+      (ventasPorCorte[k] = ventasPorCorte[k]||[]).push(v);
+    });
+    conciliar();
+    render();
+  }catch(err){
+    $('listaCortes').innerHTML='<div class="loading">No pude cargar los cortes.<br>'+err+'</div>';
+  }
+}
+
+// ---- Parsear BBVA ----
+$('fileBBVA').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ try{ parseBBVA(ev.target.result); }catch(err){ alert('No pude leer el Excel de BBVA.'); console.error(err);} };
+  r.readAsArrayBuffer(f);
+});
+
+function parseBBVA(buf){
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toUpperCase()==='FECHA'));
+  if(hi<0) throw new Error('sin header BBVA');
+  const data=rows.slice(hi+1);
+  bbva={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
+  data.forEach(r=>{
+    if(!r || r[0]==null || r[0]==='') return;
+    const desc=String(r[1]||'').toUpperCase();
+    const abono=Number(r[2])||0, cargo=Math.abs(Number(r[3])||0);
+    if(desc.includes('VENTAS DEBITO')){ bbva.totTD+=abono; bbva.lotes.push({tipo:'TD',bruto:abono,usado:false}); }
+    else if(desc.includes('VENTAS CREDITO')){ bbva.totTC+=abono; bbva.lotes.push({tipo:'TC',bruto:abono,usado:false}); }
+    else if(desc.includes('APLI TASA DE DES DEBITO')||desc.includes('APLI TASA DE DES CREDITO')) bbva.comi+=cargo;
+    else if(desc.includes('IVA TASA DE DESC DEBITO')||desc.includes('IVA TASA DE DESC CREDITO')) bbva.iva+=cargo;
+  });
+  $('resumenBBVA').classList.remove('hidden');
+  $('mTD').textContent=fmt(bbva.totTD);
+  $('mTC').textContent=fmt(bbva.totTC);
+  $('mCom').textContent=fmt(bbva.comi+bbva.iva);
+  $('mNeto').textContent=fmt(bbva.totTD+bbva.totTC-bbva.comi-bbva.iva);
+  conciliar();
+  render();
+}
+
+// ---- Conciliar ----
+function conciliar(){
+  if(bbva) bbva.lotes.forEach(l=>l.usado=false);
+  // de más antiguo a más nuevo para consumir lotes en orden
+  const orden = [...cortes].sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha)));
+  orden.forEach(c=>{
+    const td=Number(c.debito)||0, tc=Number(c.credito)||0;
+    c._mTD = td>0 ? consumir('TD',td) : 'na';
+    c._mTC = tc>0 ? consumir('TC',tc) : 'na';
+    if(td===0 && tc===0) c._estado='nt';
+    else if(!bbva) c._estado='wait';
+    else {
+      const faltaTD = td>0 && !c._mTD;
+      const faltaTC = tc>0 && !c._mTC;
+      c._estado = (!faltaTD && !faltaTC) ? 'ok' : 'pend';
+    }
+  });
+}
+function consumir(tipo,monto){
+  if(!bbva) return false;
+  const l = bbva.lotes.find(x=>!x.usado && x.tipo===tipo && near(x.bruto,monto));
+  if(l){ l.usado=true; return true; }
+  return false;
+}
+
+// ---- Render ----
+const ICON = {ok:'✓',pend:'!',nt:'—',wait:'•'};
+function render(){
+  const cont=$('listaCortes');
+  if(!cortes.length){ cont.innerHTML='<div class="loading">Aún no hay cortes guardados. Cuando la encargada guarde uno, aparece aquí.</div>'; return; }
+  cont.innerHTML='';
+  cortes.forEach(c=>{
+    const k=String(c.id_corte);
+    const td=Number(c.debito)||0, tc=Number(c.credito)||0;
+    const wrap=document.createElement('div'); wrap.className='corte';
+
+    const row=document.createElement('div'); row.className='corte-row';
+    const est=document.createElement('div'); est.className='estado '+c._estado; est.textContent=ICON[c._estado];
+    const mid=document.createElement('div'); mid.className='corte-mid';
+    mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+
+      'EF '+fmt(c.efectivo)+' · TD '+fmt(td)+' · TC '+fmt(tc)+'</div>';
+    const tot=document.createElement('div'); tot.className='corte-tot';
+    tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div><div class="s">'+(c.n_vouchers||0)+' vouchers</div>';
+    const chev=document.createElement('div'); chev.className='chev'; chev.textContent='▸';
+    row.append(est,mid,tot,chev);
+
+    const det=document.createElement('div'); det.className='detalle';
+    row.onclick=()=>{ const o=det.classList.toggle('open'); chev.textContent=o?'▾':'▸'; if(o) llenarDetalle(det,c,k); };
+    wrap.append(row,det);
+    cont.appendChild(wrap);
+  });
+}
+
+function llenarDetalle(det,c,k){
+  if(det.dataset.filled) return;
+  det.dataset.filled='1';
+  const td=Number(c.debito)||0, tc=Number(c.credito)||0;
+  let html='';
+  if(bbva && (td>0||tc>0)){
+    if(td>0) html+='<div class="conc-line '+(c._mTD?'ok':'bad')+'">'+(c._mTD?'✓':'!')+' Débito '+fmt(td)+' — '+(c._mTD?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
+    if(tc>0) html+='<div class="conc-line '+(c._mTC?'ok':'bad')+'">'+(c._mTC?'✓':'!')+' Crédito '+fmt(tc)+' — '+(c._mTC?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
+  }
+  const ventas = (ventasPorCorte[k]||[]).filter(v=>v.tipo==='TD'||v.tipo==='TC');
+  if(!ventas.length) html+='<div style="font-size:12.5px;color:var(--ink-soft)">Sin ventas con tarjeta en este corte.</div>';
+  ventas.forEach(v=>{
+    const cls = v.tipo==='TC'?'tc':'td';
+    html+='<div class="drow"><div class="tag '+cls+'">'+v.tipo+'</div>'+
+      '<div class="dm">#'+v.folio+' · '+(v.hora||'')+'</div>'+
+      '<div class="dmonto num">'+fmt(v.monto)+'</div>'+
+      (v.voucher_id?'<button class="vsmall" data-vid="'+v.voucher_id+'">📷 ver</button>':'<span style="font-size:11.5px;color:var(--red)">sin voucher</span>')+
+      '</div>';
+  });
+  det.innerHTML=html;
+  det.querySelectorAll('.vsmall').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); verVoucher(b.dataset.vid,b); });
+}
+
+async function verVoucher(id,btn){
+  const t=btn.textContent; btn.textContent='…';
+  try{
+    const res=await fetch(API_URL+'?action=obtener_voucher&id='+encodeURIComponent(id));
+    const data=await res.json();
+    if(data.ok){ $('modalImg').src=data.data; $('modal').classList.add('open'); }
+    else alert('No pude abrir el voucher: '+data.error);
+  }catch(err){ alert('Error al cargar el voucher.'); }
+  btn.textContent=t;
+}
+$('modal').onclick=()=>$('modal').classList.remove('open');
+$('btnRefrescar').onclick=cargarCortes;
+
+cargarCortes();
+</script>
+</body>
+</html>
