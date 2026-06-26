@@ -9,7 +9,7 @@
   :root{
     --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
     --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--green-soft:#E5F1EA;
-    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;
+    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;--gray-soft:#F0EEE8;
   }
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;padding-bottom:96px}
@@ -33,47 +33,56 @@
   .drop small{color:var(--ink-soft);font-size:12.5px}
   input[type=file]{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden}
 
-  .corte-head{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px;margin-bottom:14px}
-  .corte-head .fecha{font-size:19px;font-weight:700;letter-spacing:-.3px}
-  .corte-head .lote{font-size:12px;color:var(--ink-soft)}
-  .pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:20px;background:var(--ink);color:#fff;white-space:nowrap}
-  .totales{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-  .tot{border:1px solid var(--line);border-radius:10px;padding:10px 11px;background:#FCFBF8}
-  .tot .lbl{font-size:11px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px}
-  .tot .val{font-size:17px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
-  .tot.ef{border-left:3px solid var(--green)}
-  .tot.td{border-left:3px solid var(--blue)}
-  .tot.tc{border-left:3px solid var(--amber)}
-  .totsum{margin-top:10px;font-size:13px;color:var(--ink-soft);display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid var(--line)}
-  .totsum b{color:var(--ink);font-size:15px}
+  .lista-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:10px}
+  .lista-head .t{font-size:15px;font-weight:700}
+  .lista-head .s{font-size:12.5px;color:var(--ink-soft)}
 
-  .venta{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--line)}
+  .corte{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:#fff}
+  .corte.tiene-tarjeta{border-left:3px solid var(--amber)}
+  .crow{display:flex;align-items:center;gap:11px;padding:13px 14px;cursor:pointer}
+  .crow:hover{background:#FCFBF8}
+  .cmid{flex:1;min-width:0}
+  .cmid .l1{font-weight:700;font-size:14px}
+  .cmid .l2{font-size:11.5px;color:var(--ink-soft)}
+  .ctot{text-align:right;flex:0 0 auto}
+  .ctot .t{font-weight:700;font-size:15px}
+  .vbadge{font-size:10.5px;font-weight:700;padding:2px 7px;border-radius:20px;display:inline-block;margin-top:2px}
+  .vbadge.pend{background:var(--amber-soft);color:var(--amber)}
+  .vbadge.done{background:var(--green-soft);color:var(--green)}
+  .vbadge.none{background:var(--gray-soft);color:var(--ink-soft)}
+  .chev{flex:0 0 auto;color:var(--ink-soft);font-size:13px;width:13px}
+
+  .cdet{border-top:1px solid var(--line);padding:10px 14px;background:#FCFBF8;display:none}
+  .cdet.open{display:block}
+  .venta{display:flex;align-items:center;gap:11px;padding:10px 0;border-bottom:1px solid var(--line)}
   .venta:last-child{border-bottom:none}
-  .tag{flex:0 0 auto;width:42px;height:42px;border-radius:9px;display:grid;place-items:center;font-size:11px;font-weight:800;letter-spacing:.3px}
+  .tag{flex:0 0 auto;width:38px;height:38px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800}
   .tag.tc{background:var(--amber-soft);color:var(--amber)}
   .tag.td{background:var(--blue-soft);color:var(--blue)}
   .venta .info{flex:1;min-width:0}
-  .venta .monto{font-weight:700;font-size:16px;letter-spacing:-.3px}
-  .venta .meta{font-size:12px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .vbtn{flex:0 0 auto;border:1.5px solid var(--amber);color:var(--amber);background:#fff;font-weight:700;font-size:12.5px;padding:8px 11px;border-radius:9px;cursor:pointer;display:flex;align-items:center;gap:5px;transition:.15s;white-space:nowrap}
-  .vbtn:hover{background:var(--amber-soft)}
-  .thumb{flex:0 0 auto;width:42px;height:42px;border-radius:9px;object-fit:cover;border:1px solid var(--line)}
-  .empty{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:18px 8px}
-  .toggle-all{background:none;border:none;color:var(--amber);font-weight:700;font-size:12.5px;cursor:pointer;padding:8px 0 2px}
+  .venta .monto{font-weight:700;font-size:15px}
+  .venta .meta{font-size:11.5px;color:var(--ink-soft)}
+  .vbtn{flex:0 0 auto;border:1.5px solid var(--amber);color:var(--amber);background:#fff;font-weight:700;font-size:12px;padding:7px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .thumb{flex:0 0 auto;width:38px;height:38px;border-radius:8px;object-fit:cover;border:1px solid var(--line)}
+  .breakdown{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  .chip{font-size:11px;font-weight:600;padding:3px 8px;border-radius:7px;background:var(--gray-soft);color:var(--ink-soft)}
+  .chip.td{background:var(--blue-soft);color:var(--blue)}
+  .chip.tc{background:var(--amber-soft);color:var(--amber)}
+  .chip.ef{background:var(--green-soft);color:var(--green)}
+  .empty{font-size:12.5px;color:var(--ink-soft);padding:6px 0}
 
   .field{margin-bottom:11px}
-  .field label{display:block;font-size:12px;font-weight:600;color:var(--ink-soft);margin-bottom:5px}
   .field input{width:100%;border:1px solid var(--line);border-radius:10px;padding:11px 12px;font-size:15px;font-family:inherit;background:#FCFBF8;color:var(--ink)}
   .field input:focus{outline:2px solid var(--amber);border-color:transparent;background:#fff}
 
   .savebar{position:fixed;left:0;right:0;bottom:0;background:rgba(255,255,255,.92);backdrop-filter:blur(8px);border-top:1px solid var(--line);padding:12px 0;z-index:20}
   .savebar .wrap{display:flex;align-items:center;gap:12px}
   .savebtn{flex:1;background:var(--amber);color:#19170F;border:none;border-radius:11px;padding:14px;font-size:15px;font-weight:800;cursor:pointer;font-family:inherit;transition:.15s}
-  .savebtn:disabled{opacity:.5;cursor:not-allowed}
+  .savebtn:disabled{opacity:.55;cursor:not-allowed}
   .savebtn.ok{background:var(--green);color:#fff}
 
   .config{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-top:18px}
-  .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:22px;line-height:1.5}
+  .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
 </head>
@@ -91,7 +100,7 @@
 
 <div class="wrap">
 
-  <div id="avisoConfig" class="config hidden">⚠️ Falta pegar la liga del backend en el archivo (API_URL). Avísale a Aldo.</div>
+  <div id="avisoConfig" class="config hidden">⚠️ Falta pegar la liga del backend (API_URL). Avísale a Aldo.</div>
 
   <section>
     <div class="card">
@@ -100,46 +109,26 @@
         <input type="file" id="fileSait" accept=".xlsx,.xls">
         <div class="ic">⬆</div>
         <b>Subir movimientos de caja</b>
-        <small>El Excel que exportas de SAIT</small>
+        <small>Un día o varios — la app los separa solos</small>
       </label>
     </div>
   </section>
 
-  <section id="secResumen" class="hidden">
+  <section id="secLista" class="hidden">
     <div class="card">
-      <div class="eyebrow"><span class="n">2</span> Resumen del corte</div>
-      <div class="corte-head">
-        <div><div class="fecha" id="rFecha">—</div><div class="lote" id="rLote">—</div></div>
-        <span class="pill" id="rOps">—</span>
+      <div class="lista-head">
+        <div class="t" id="listaTitulo">Días detectados</div>
+        <div class="s" id="listaTotal"></div>
       </div>
-      <div class="totales">
-        <div class="tot ef"><div class="lbl">Efectivo</div><div class="val num" id="rEF">$0</div></div>
-        <div class="tot td"><div class="lbl">Débito</div><div class="val num" id="rTD">$0</div></div>
-        <div class="tot tc"><div class="lbl">Crédito</div><div class="val num" id="rTC">$0</div></div>
-      </div>
-      <div class="totsum"><span>Total de ventas del día</span><b class="num" id="rTotal">$0</b></div>
-    </div>
-  </section>
-
-  <section id="secVouchers" class="hidden">
-    <div class="card">
-      <div class="eyebrow"><span class="n">3</span> Vouchers de tarjeta</div>
-      <div id="listaTarjeta"></div>
+      <div id="listaCortes"></div>
     </div>
   </section>
 
   <section id="secCaptura" class="hidden">
     <div class="card">
-      <div class="eyebrow"><span class="n">4</span> ¿Quién captura?</div>
-      <div class="field">
-        <input type="text" id="capturadoPor" placeholder="Tu nombre (ej. Marisol)">
-      </div>
+      <div class="eyebrow"><span class="n">2</span> ¿Quién captura?</div>
+      <div class="field"><input type="text" id="capturadoPor" placeholder="Tu nombre (ej. Marisol)"></div>
     </div>
-  </section>
-
-  <section id="secDetalle" class="hidden">
-    <button class="toggle-all" id="btnDetalle">▸ Ver todas las ventas del día</button>
-    <div class="card hidden" id="detalleCard" style="margin-top:8px"><div id="listaTodas"></div></div>
   </section>
 
   <div class="footnote" id="foot"></div>
@@ -147,18 +136,15 @@
 
 <div class="savebar hidden" id="savebar">
   <div class="wrap">
-    <button class="savebtn" id="btnGuardar">Guardar corte</button>
+    <button class="savebtn" id="btnGuardar">Guardar</button>
   </div>
 </div>
 
 <script>
-// ============================================================
-// CONFIG — pega aquí la liga /exec del backend (Apps Script)
 const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
-// ============================================================
 
 const $ = id => document.getElementById(id);
-let sait=null;
+let cortes=[];
 const fmt = n => '$' + (n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 if(!API_URL) $('avisoConfig').classList.remove('hidden');
@@ -174,7 +160,7 @@ function fechaISO(s){
   const d = new Date(Date.UTC(1899,11,30) + Math.round(s)*86400000);
   return d.toISOString().slice(0,10);
 }
-function clasifica(t){ t=String(t||'').trim().toUpperCase(); return ['EF','TC','TD','FONDO'].includes(t)?t:(t||'OTRO'); }
+function clasifica(t){ t=String(t||'').trim().toUpperCase(); return ['EF','TC','TD','TR','FONDO'].includes(t)?t:(t||'OTRO'); }
 
 $('fileSait').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
@@ -193,79 +179,112 @@ function parseSait(buf){
   const ix=n=>h.indexOf(n);
   const iF=ix('folio'),iFe=ix('fecha'),iH=ix('hora'),iC=ix('corte'),iT=ix('tipo'),iCl=ix('cliente'),iI=ix('importe');
   const data=rows.slice(hi+1).filter(r=>r.length && String(r[iF]).trim()!=='');
-  sait={fecha:'',fechaISO:'',lote:'',ventas:[],tarjeta:[],totEF:0,totTD:0,totTC:0,ops:0};
-  let fr=null;
+
+  const grupos={};
   data.forEach(r=>{
+    const lote=String(r[iC]||'').trim() || 'SIN_CORTE';
     const cat=clasifica(r[iT]);
-    if(cat==='FONDO'){ if(fr===null) fr=r[iFe]; return; }
-    if(fr===null) fr=r[iFe];
-    const v={folio:String(r[iF]).trim(),hora:String(r[iH]||'').trim(),lote:String(r[iC]||'').trim(),cat,cliente:String(r[iCl]||'').trim()||'Cliente mostrador',monto:Number(r[iI])||0,voucher:null};
-    sait.ventas.push(v); sait.lote=v.lote||sait.lote;
-    if(cat==='EF') sait.totEF+=v.monto; else if(cat==='TD') sait.totTD+=v.monto; else if(cat==='TC') sait.totTC+=v.monto;
+    if(!grupos[lote]) grupos[lote]={lote, fechaRaw:null, ventas:[], totEF:0,totTD:0,totTC:0,totTR:0,totOtro:0};
+    const g=grupos[lote];
+    if(g.fechaRaw===null) g.fechaRaw=r[iFe];
+    if(cat==='FONDO') return;
+    const monto=Number(r[iI])||0;
+    const v={folio:String(r[iF]).trim(),hora:String(r[iH]||'').trim(),lote,cat,cliente:String(r[iCl]||'').trim()||'Cliente mostrador',monto,voucher:null};
+    g.ventas.push(v);
+    if(cat==='EF') g.totEF+=monto; else if(cat==='TD') g.totTD+=monto; else if(cat==='TC') g.totTC+=monto; else if(cat==='TR') g.totTR+=monto; else g.totOtro+=monto;
   });
-  sait.fecha=serialToFecha(fr); sait.fechaISO=fechaISO(fr); sait.ops=sait.ventas.length;
-  sait.tarjeta=sait.ventas.filter(v=>v.cat==='TC'||v.cat==='TD');
+
+  cortes=Object.values(grupos).map(g=>({
+    lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
+    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'),
+    totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
+    total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
+  }));
+  cortes.sort((a,b)=>a.fechaISO.localeCompare(b.fechaISO));
   render();
 }
 
 function render(){
-  $('rFecha').textContent=sait.fecha||'—';
-  $('rLote').textContent='Corte '+(sait.lote||'—');
-  $('rOps').textContent=sait.ops+' ventas';
-  $('rEF').textContent=fmt(sait.totEF);
-  $('rTD').textContent=fmt(sait.totTD);
-  $('rTC').textContent=fmt(sait.totTC);
-  $('rTotal').textContent=fmt(sait.totEF+sait.totTD+sait.totTC);
-  const cont=$('listaTarjeta'); cont.innerHTML='';
-  if(sait.tarjeta.length===0) cont.innerHTML='<div class="empty">No hubo ventas con tarjeta en este corte.</div>';
-  else sait.tarjeta.forEach(v=>cont.appendChild(ventaRow(v,true)));
-  const all=$('listaTodas'); all.innerHTML='';
-  sait.ventas.forEach(v=>all.appendChild(ventaRow(v,false)));
-  ['secResumen','secVouchers','secCaptura','secDetalle'].forEach(s=>$(s).classList.remove('hidden'));
+  const cont=$('listaCortes'); cont.innerHTML='';
+  const n=cortes.length;
+  const totalGral=cortes.reduce((s,c)=>s+c.total,0);
+  $('listaTitulo').textContent = n===1 ? '1 día detectado' : n+' días detectados';
+  $('listaTotal').textContent = 'Total ' + fmt(totalGral);
+
+  cortes.forEach((c,idx)=>{
+    const wrap=document.createElement('div'); wrap.className='corte'+(c.tarjeta.length?' tiene-tarjeta':'');
+    const row=document.createElement('div'); row.className='crow';
+    const mid=document.createElement('div'); mid.className='cmid';
+    mid.innerHTML='<div class="l1">'+c.fecha+'</div><div class="l2">Corte '+c.lote+' · '+c.ventas.length+' ventas</div>';
+    const tot=document.createElement('div'); tot.className='ctot';
+    let badge='';
+    if(c.tarjeta.length===0) badge='<div class="vbadge none">sin tarjeta</div>';
+    else { const conV=c.tarjeta.filter(v=>v.voucher).length;
+      badge='<div class="vbadge '+(conV===c.tarjeta.length?'done':'pend')+'">'+conV+'/'+c.tarjeta.length+' vouchers</div>'; }
+    tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div>'+badge;
+    const chev=document.createElement('div'); chev.className='chev'; chev.textContent='▸';
+    row.append(mid,tot,chev);
+
+    const det=document.createElement('div'); det.className='cdet';
+    row.onclick=()=>{ const o=det.classList.toggle('open'); chev.textContent=o?'▾':'▸'; };
+    llenarDet(det,c);
+    wrap.append(row,det);
+    cont.appendChild(wrap);
+  });
+
+  ['secLista','secCaptura'].forEach(s=>$(s).classList.remove('hidden'));
   $('savebar').classList.remove('hidden');
   resetBtn();
+  if(n===1){ const d=cont.querySelector('.cdet'); if(d){d.classList.add('open'); cont.querySelector('.chev').textContent='▾';} }
 }
 
-function ventaRow(v,conVoucher){
+function llenarDet(det,c){
+  let chips='<div class="breakdown">';
+  chips+='<span class="chip ef">EF '+fmt(c.totEF)+'</span>';
+  if(c.totTD) chips+='<span class="chip td">TD '+fmt(c.totTD)+'</span>';
+  if(c.totTC) chips+='<span class="chip tc">TC '+fmt(c.totTC)+'</span>';
+  if(c.totTR) chips+='<span class="chip">Transf '+fmt(c.totTR)+'</span>';
+  if(c.totOtro) chips+='<span class="chip">Otros '+fmt(c.totOtro)+'</span>';
+  chips+='</div>';
+  det.innerHTML=chips;
+  if(c.tarjeta.length===0){ det.innerHTML+='<div class="empty">Sin ventas con tarjeta.</div>'; return; }
+  c.tarjeta.forEach(v=>det.appendChild(ventaRow(v,c)));
+}
+
+function ventaRow(v,c){
   const row=document.createElement('div'); row.className='venta';
-  const tg=document.createElement('div');
-  const cls=v.cat==='TC'?'tc':(v.cat==='TD'?'td':'');
-  tg.className='tag '+cls; tg.textContent=v.cat;
-  if(v.cat==='EF'){ tg.style.background='var(--green-soft)'; tg.style.color='var(--green)'; }
+  const tg=document.createElement('div'); tg.className='tag '+(v.cat==='TC'?'tc':'td'); tg.textContent=v.cat;
   row.appendChild(tg);
   const info=document.createElement('div'); info.className='info';
-  info.innerHTML=`<div class="monto num">${fmt(v.monto)}</div><div class="meta">#${v.folio} · ${v.hora} · ${v.cliente}</div>`;
+  info.innerHTML='<div class="monto num">'+fmt(v.monto)+'</div><div class="meta">#'+v.folio+' · '+v.hora+'</div>';
   row.appendChild(info);
-  if(conVoucher){
-    if(v.voucher){
-      const img=document.createElement('img'); img.className='thumb'; img.src=v.voucher; img.title='Tocar para reemplazar';
-      img.onclick=()=>pickVoucher(v); row.appendChild(img);
-    } else {
-      const btn=document.createElement('button'); btn.className='vbtn'; btn.innerHTML='📷 Voucher';
-      btn.onclick=()=>pickVoucher(v); row.appendChild(btn);
-    }
+  if(v.voucher){
+    const img=document.createElement('img'); img.className='thumb'; img.src=v.voucher; img.title='Tocar para reemplazar';
+    img.onclick=ev=>{ev.stopPropagation(); pickVoucher(v);}; row.appendChild(img);
+  } else {
+    const btn=document.createElement('button'); btn.className='vbtn'; btn.innerHTML='📷 Voucher';
+    btn.onclick=ev=>{ev.stopPropagation(); pickVoucher(v);}; row.appendChild(btn);
   }
   return row;
 }
 
 function pickVoucher(v){
   const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
-  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, dataUrl=>{ v.voucher=dataUrl; render(); }); };
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, d=>{ v.voucher=d; render(); }); };
   inp.click();
 }
 
-// Compresión a JPEG ~200KB máx, lado mayor 1280px
 function comprimirFoto(file, cb){
   const reader=new FileReader();
   reader.onload=e=>{
     const img=new Image();
     img.onload=()=>{
-      let {width:w,height:h}=img; const max=1280;
+      let w=img.width,h=img.height; const max=1280;
       if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
       else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
       const c=document.createElement('canvas'); c.width=w; c.height=h;
       c.getContext('2d').drawImage(img,0,0,w,h);
-      let q=0.7, out=c.toDataURL('image/jpeg',q);
+      let q=0.7,out=c.toDataURL('image/jpeg',q);
       while(out.length>270000 && q>0.4){ q-=0.1; out=c.toDataURL('image/jpeg',q); }
       cb(out);
     };
@@ -274,40 +293,28 @@ function comprimirFoto(file, cb){
   reader.readAsDataURL(file);
 }
 
-$('btnDetalle').addEventListener('click',()=>{
-  const c=$('detalleCard'); const open=c.classList.toggle('hidden');
-  $('btnDetalle').textContent=(open?'▸':'▾')+' '+(open?'Ver todas las ventas del día':'Ocultar ventas');
-});
-
-function resetBtn(){ const b=$('btnGuardar'); b.disabled=false; b.classList.remove('ok'); b.textContent='Guardar corte'; }
+function resetBtn(){ const b=$('btnGuardar'); b.disabled=false; b.classList.remove('ok'); b.textContent='Guardar '+(cortes.length>1?cortes.length+' cortes':'corte'); }
 
 $('btnGuardar').addEventListener('click', async ()=>{
-  if(!sait) return;
-  if(!API_URL){ alert('Falta configurar la liga del backend (API_URL).'); return; }
-  const faltan = sait.tarjeta.filter(v=>!v.voucher).length;
-  if(faltan>0 && !confirm('Faltan '+faltan+' voucher(s) por foto. ¿Guardar de todos modos?')) return;
-
-  const b=$('btnGuardar'); b.disabled=true; b.textContent='Guardando…';
-  const payload={
-    action:'guardar_corte',
-    corte:{ id_corte:sait.lote, fecha:sait.fechaISO, sucursal:'Moto Pro',
-            efectivo:sait.totEF, debito:sait.totTD, credito:sait.totTC,
-            total:sait.totEF+sait.totTD+sait.totTC, capturado_por:$('capturadoPor').value.trim() },
-    ventas: sait.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto,
-                                  voucherB64: v.voucher || '' }))
-  };
-  try{
-    const res = await fetch(API_URL, { method:'POST', body: JSON.stringify(payload) });
-    const data = await res.json();
-    if(data.ok){
-      b.classList.add('ok'); b.textContent='✓ Guardado ('+data.vouchers+' vouchers)';
-      $('foot').textContent='Corte '+data.id_corte+' guardado correctamente.';
-    } else {
-      b.disabled=false; b.textContent='Reintentar'; alert('Error del backend: '+data.error);
-    }
-  }catch(err){
-    b.disabled=false; b.textContent='Reintentar'; alert('No se pudo conectar. Revisa tu señal e inténtalo de nuevo.'); console.error(err);
+  if(!cortes.length) return;
+  if(!API_URL){ alert('Falta configurar la liga del backend.'); return; }
+  const nombre=$('capturadoPor').value.trim();
+  const b=$('btnGuardar'); b.disabled=true;
+  let ok=0; const fail=[];
+  for(let i=0;i<cortes.length;i++){
+    const c=cortes[i];
+    b.textContent='Guardando '+(i+1)+'/'+cortes.length+'…';
+    const payload={
+      action:'guardar_corte',
+      corte:{ id_corte:c.lote, fecha:c.fechaISO, sucursal:'Moto Pro',
+              efectivo:c.totEF, debito:c.totTD, credito:c.totTC, total:c.total, capturado_por:nombre },
+      ventas:c.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto, voucherB64:v.voucher||'' }))
+    };
+    try{ const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)}); const data=await res.json(); data.ok?ok++:fail.push(c.lote); }
+    catch(err){ fail.push(c.lote); console.error(err); }
   }
+  if(fail.length===0){ b.classList.add('ok'); b.textContent='✓ Guardado ('+ok+')'; $('foot').textContent='Se guardaron '+ok+' corte(s) correctamente.'; }
+  else { b.disabled=false; b.textContent='Reintentar'; $('foot').textContent='Guardados: '+ok+'. Fallaron: '+fail.join(', ')+'. Revisa tu señal e inténtalo de nuevo.'; }
 });
 </script>
 </body>
