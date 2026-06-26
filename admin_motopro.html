@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ingresos Moto Pro · Admin</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root{
     --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
@@ -108,10 +109,10 @@
     <div class="card">
       <div class="eyebrow">1 · Subir movimientos de BBVA</div>
       <label class="drop" tabindex="0">
-        <input type="file" id="fileBBVA" accept=".xlsx,.xls">
+        <input type="file" id="fileBBVA" accept=".xlsx,.xls,.pdf">
         <div class="ic">🏦</div>
         <b>Subir estado de cuenta</b>
-        <small>La app toma solo las ventas con terminal (Moto Pro)</small>
+        <small>Excel o PDF — toma solo las ventas con terminal (Moto Pro)</small>
       </label>
       <div id="resumenBBVA" class="hidden">
         <div class="mes-grid" style="margin-top:14px">
@@ -175,13 +176,83 @@ async function cargarCortes(){
   }
 }
 
-// ---- Parsear BBVA ----
+// ---- Parsear BBVA (Excel o PDF) ----
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
 $('fileBBVA').addEventListener('change', e=>{
   const f=e.target.files[0]; if(!f) return;
+  const esPDF = /\.pdf$/i.test(f.name);
   const r=new FileReader();
-  r.onload=ev=>{ try{ parseBBVA(ev.target.result); }catch(err){ alert('No pude leer el Excel de BBVA.'); console.error(err);} };
+  r.onload=async ev=>{
+    try{
+      if(esPDF) await parsePDF(ev.target.result);
+      else parseBBVA(ev.target.result);
+    }catch(err){ alert('No pude leer el estado de cuenta. Revisa que sea el Excel o el PDF de BBVA.'); console.error(err); }
+  };
   r.readAsArrayBuffer(f);
 });
+
+// Aplica los datos extraídos (común a Excel y PDF) y concilia
+function setBBVA(d){
+  bbva = d;
+  $('resumenBBVA').classList.remove('hidden');
+  $('mTD').textContent=fmt(bbva.totTD);
+  $('mTC').textContent=fmt(bbva.totTC);
+  $('mCom').textContent=fmt(bbva.comi+bbva.iva);
+  $('mNeto').textContent=fmt(bbva.totTD+bbva.totTC-bbva.comi-bbva.iva);
+  conciliar();
+  render();
+}
+
+// ---- PDF de BBVA ----
+const _MON = /-?\$[\d,]+\.\d{2}/g;
+const _num = s => parseFloat(s.replace(/[$,]/g,''))||0;
+
+async function parsePDF(buf){
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let lineas=[];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const tc=await page.getTextContent();
+    const items=tc.items.filter(i=>i.str && i.str.trim())
+      .map(i=>({x:i.transform[4], y:i.transform[5], s:i.str}))
+      .sort((a,b)=> b.y-a.y || a.x-b.x);
+    let cur=[], yRef=null;
+    items.forEach(it=>{
+      if(yRef===null || Math.abs(it.y-yRef)<=6){ cur.push(it); if(yRef===null) yRef=it.y; }
+      else { lineas.push(cur); cur=[it]; yRef=it.y; }
+    });
+    if(cur.length) lineas.push(cur);
+  }
+  const textos = lineas.map(arr => arr.sort((a,b)=>a.x-b.x).map(o=>o.s).join(' '));
+  setBBVA(procesarBBVA(textos));
+}
+
+// Parser con estado: las ventas traen su monto en la misma línea;
+// la comisión y el IVA traen el monto en renglón aparte.
+function procesarBBVA(lineas){
+  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
+  let pend=null;
+  lineas.forEach(ln=>{
+    const flat=ln.replace(/\s/g,'').toUpperCase();
+    const montos=(flat.match(_MON)||[]).map(_num);
+    const ventaTD = flat.includes('VENTASDEBITO') && flat.includes('PUNTODEVENTA');
+    const ventaTC = flat.includes('VENTASCREDITO') && flat.includes('PUNTODEVENTA');
+    const esApli = flat.includes('APLITASADEDES');
+    const esIva  = flat.includes('IVATASA') && flat.includes('DESC');
+    if(ventaTD && montos.length){ d.totTD+=montos[0]; d.lotes.push({tipo:'TD',bruto:montos[0],usado:false}); pend=null; }
+    else if(ventaTC && montos.length){ d.totTC+=montos[0]; d.lotes.push({tipo:'TC',bruto:montos[0],usado:false}); pend=null; }
+    else if(esApli || esIva){
+      if(montos.length){ if(esApli) d.comi+=Math.abs(montos[0]); else d.iva+=Math.abs(montos[0]); pend=null; }
+      else pend = esApli ? 'comi' : 'iva';
+    }
+    else if(montos.length && pend){
+      if(pend==='comi') d.comi+=Math.abs(montos[0]); else d.iva+=Math.abs(montos[0]);
+      pend=null;
+    }
+  });
+  return d;
+}
 
 function parseBBVA(buf){
   const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
@@ -190,23 +261,17 @@ function parseBBVA(buf){
   let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toUpperCase()==='FECHA'));
   if(hi<0) throw new Error('sin header BBVA');
   const data=rows.slice(hi+1);
-  bbva={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
+  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
   data.forEach(r=>{
     if(!r || r[0]==null || r[0]==='') return;
     const desc=String(r[1]||'').toUpperCase();
     const abono=Number(r[2])||0, cargo=Math.abs(Number(r[3])||0);
-    if(desc.includes('VENTAS DEBITO')){ bbva.totTD+=abono; bbva.lotes.push({tipo:'TD',bruto:abono,usado:false}); }
-    else if(desc.includes('VENTAS CREDITO')){ bbva.totTC+=abono; bbva.lotes.push({tipo:'TC',bruto:abono,usado:false}); }
-    else if(desc.includes('APLI TASA DE DES DEBITO')||desc.includes('APLI TASA DE DES CREDITO')) bbva.comi+=cargo;
-    else if(desc.includes('IVA TASA DE DESC DEBITO')||desc.includes('IVA TASA DE DESC CREDITO')) bbva.iva+=cargo;
+    if(desc.includes('VENTAS DEBITO')){ d.totTD+=abono; d.lotes.push({tipo:'TD',bruto:abono,usado:false}); }
+    else if(desc.includes('VENTAS CREDITO')){ d.totTC+=abono; d.lotes.push({tipo:'TC',bruto:abono,usado:false}); }
+    else if(desc.includes('APLI TASA DE DES DEBITO')||desc.includes('APLI TASA DE DES CREDITO')) d.comi+=cargo;
+    else if(desc.includes('IVA TASA DE DESC DEBITO')||desc.includes('IVA TASA DE DESC CREDITO')) d.iva+=cargo;
   });
-  $('resumenBBVA').classList.remove('hidden');
-  $('mTD').textContent=fmt(bbva.totTD);
-  $('mTC').textContent=fmt(bbva.totTC);
-  $('mCom').textContent=fmt(bbva.comi+bbva.iva);
-  $('mNeto').textContent=fmt(bbva.totTD+bbva.totTC-bbva.comi-bbva.iva);
-  conciliar();
-  render();
+  setBBVA(d);
 }
 
 // ---- Conciliar ----
