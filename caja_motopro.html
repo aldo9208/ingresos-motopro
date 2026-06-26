@@ -82,6 +82,12 @@
   .savebtn.ok{background:var(--green);color:#fff}
 
   .config{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-top:18px}
+  .fact-ok{background:var(--green-soft);color:var(--green);border-radius:11px;padding:13px 14px;font-size:13.5px;font-weight:700}
+  .fact-bad{background:var(--red-soft);color:var(--red);border-radius:11px;padding:13px 14px;font-size:15px;font-weight:800}
+  .fact-lista{margin-top:8px;border:1px solid var(--line);border-radius:11px;overflow:hidden}
+  .fact-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 13px;font-size:13.5px;border-bottom:1px solid var(--line);background:#fff}
+  .fact-item:last-child{border-bottom:none}
+  .fact-item b{color:var(--red)}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
@@ -131,6 +137,19 @@
     </div>
   </section>
 
+  <section id="secFacturas" class="hidden">
+    <div class="card">
+      <div class="eyebrow"><span class="n">3</span> Revisar facturación</div>
+      <label class="drop sm" tabindex="0" style="padding:18px 16px">
+        <input type="file" id="fileFacturas" accept=".xlsx,.xls">
+        <div class="ic" style="font-size:22px">🧾</div>
+        <b>Subir facturas de SAIT</b>
+        <small>Revisa que cada tarjeta y transferencia esté facturada</small>
+      </label>
+      <div id="resumenFact" class="hidden" style="margin-top:14px"></div>
+    </div>
+  </section>
+
   <div class="footnote" id="foot"></div>
 </div>
 
@@ -144,7 +163,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
 
 const $ = id => document.getElementById(id);
-let cortes=[];
+let cortes=[], facturas=null;
 const fmt = n => '$' + (n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 if(!API_URL) $('avisoConfig').classList.remove('hidden');
@@ -232,7 +251,8 @@ function render(){
     cont.appendChild(wrap);
   });
 
-  ['secLista','secCaptura'].forEach(s=>$(s).classList.remove('hidden'));
+  ['secLista','secCaptura','secFacturas'].forEach(s=>$(s).classList.remove('hidden'));
+  if(facturas) revisarFacturacion();
   $('savebar').classList.remove('hidden');
   resetBtn();
   if(n===1){ const d=cont.querySelector('.cdet'); if(d){d.classList.add('open'); cont.querySelector('.chev').textContent='▾';} }
@@ -291,6 +311,58 @@ function comprimirFoto(file, cb){
     img.src=e.target.result;
   };
   reader.readAsDataURL(file);
+}
+
+// ---- Revisar facturación ----
+$('fileFacturas').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ try{ parseFacturas(ev.target.result); }catch(err){ alert('No pude leer el archivo de facturas. Revisa que sea la Consulta de Facturas de SAIT.'); console.error(err); } };
+  r.readAsArrayBuffer(f);
+});
+
+function parseFacturas(buf){
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==='folio'));
+  if(hi<0) throw new Error('sin header facturas');
+  const h=rows[hi].map(c=>String(c).trim().toLowerCase());
+  const ix=n=>h.indexOf(n);
+  const iFolio=ix('folio'), iTotal=ix('total');
+  facturas = rows.slice(hi+1)
+    .filter(r=> r.length && (Number(r[iTotal])||0) > 0)
+    .map(r=>({ folio:String(r[iFolio]||'').trim(), total:Number(r[iTotal])||0, usada:false }));
+  revisarFacturacion();
+}
+
+function buscarFactura(monto){
+  const f=facturas.find(x=>!x.usada && Math.abs(x.total-monto)<=0.01);
+  if(f){ f.usada=true; return true; }
+  return false;
+}
+
+function revisarFacturacion(){
+  if(!facturas) return;
+  facturas.forEach(f=>f.usada=false);
+  let total=0; const faltan=[];
+  cortes.forEach(c=>{
+    c.ventas.filter(v=>['TD','TC','TR'].includes(v.cat)).forEach(v=>{
+      total++;
+      if(!buscarFactura(v.monto)) faltan.push({fecha:c.fecha, cat:v.cat, monto:v.monto, folio:v.folio});
+    });
+  });
+  const el=$('resumenFact'); el.classList.remove('hidden');
+  if(faltan.length===0){
+    el.innerHTML='<div class="fact-ok">✓ Todo facturado — las '+total+' ventas con tarjeta y transferencia tienen su factura.</div>';
+    return;
+  }
+  let html='<div class="fact-bad">⚠️ Faltan '+faltan.length+' por facturar</div><div class="fact-lista">';
+  faltan.forEach(f=>{
+    const nom=f.cat==='TD'?'Débito':(f.cat==='TC'?'Crédito':'Transferencia');
+    html+='<div class="fact-item"><span>'+f.fecha+' · '+nom+' · #'+f.folio+'</span><b class="num">'+fmt(f.monto)+'</b></div>';
+  });
+  el.innerHTML=html+'</div>';
 }
 
 function resetBtn(){ const b=$('btnGuardar'); b.disabled=false; b.classList.remove('ok'); b.textContent='Guardar '+(cortes.length>1?cortes.length+' cortes':'corte'); }

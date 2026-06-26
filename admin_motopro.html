@@ -83,6 +83,16 @@
 
   .loading{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:24px 8px}
   .config{background:var(--red-soft);color:var(--red);border-radius:10px;padding:10px 12px;font-size:12.5px;font-weight:600;margin-top:18px}
+  .tag.tr{background:#ECE6F7;color:#6A4FB0}
+  .fbadge{font-size:10px;font-weight:700;padding:1px 6px;border-radius:5px;margin-left:6px;white-space:nowrap}
+  .fbadge.ok{background:var(--green-soft);color:var(--green)}
+  .fbadge.bad{background:var(--red-soft);color:var(--red)}
+  .fact-ok{background:var(--green-soft);color:var(--green);border-radius:10px;padding:11px 13px;font-size:13px;font-weight:700;margin-top:14px}
+  .fact-bad{background:var(--red-soft);color:var(--red);border-radius:10px;padding:11px 13px;font-size:14px;font-weight:800;margin-top:14px}
+  .fact-lista{margin-top:8px;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .fact-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 12px;font-size:13px;border-bottom:1px solid var(--line);background:#fff}
+  .fact-item:last-child{border-bottom:none}
+  .fact-item b{color:var(--red)}
   .modal{position:fixed;inset:0;background:rgba(0,0,0,.7);display:none;place-items:center;z-index:50;padding:20px}
   .modal.open{display:grid}
   .modal img{max-width:100%;max-height:85vh;border-radius:10px}
@@ -127,8 +137,21 @@
 
   <section>
     <div class="card">
+      <div class="eyebrow">2 · Revisar facturación</div>
+      <label class="drop" tabindex="0">
+        <input type="file" id="fileFacturas" accept=".xlsx,.xls">
+        <div class="ic">🧾</div>
+        <b>Subir facturas de SAIT</b>
+        <small>Cruza cada tarjeta y transferencia contra su factura</small>
+      </label>
+      <div id="resumenFact" class="hidden"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
       <div class="topbar">
-        <div class="eyebrow" style="margin:0;flex:1">2 · Cortes registrados</div>
+        <div class="eyebrow" style="margin:0;flex:1">3 · Cortes registrados</div>
         <button class="btn" id="btnRefrescar">↻ Refrescar</button>
       </div>
       <div id="listaCortes"><div class="loading">Cargando cortes…</div></div>
@@ -150,7 +173,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOS
 // ============================================================
 
 const $ = id => document.getElementById(id);
-let cortes=[], ventasPorCorte={}, bbva=null;
+let cortes=[], ventasPorCorte={}, bbva=null, facturas=null;
 const fmt = n => '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const near = (a,b) => Math.abs(Number(a)-Number(b)) <= 0.01;
 
@@ -170,6 +193,7 @@ async function cargarCortes(){
       (ventasPorCorte[k] = ventasPorCorte[k]||[]).push(v);
     });
     conciliar();
+    revisarFacturacion();
     render();
   }catch(err){
     $('listaCortes').innerHTML='<div class="loading">No pude cargar los cortes.<br>'+err+'</div>';
@@ -201,6 +225,7 @@ function setBBVA(d){
   $('mCom').textContent=fmt(bbva.comi+bbva.iva);
   $('mNeto').textContent=fmt(bbva.totTD+bbva.totTC-bbva.comi-bbva.iva);
   conciliar();
+  revisarFacturacion();
   render();
 }
 
@@ -252,6 +277,70 @@ function procesarBBVA(lineas){
     }
   });
   return d;
+}
+
+// ---- Facturas (SAIT) ----
+$('fileFacturas').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=ev=>{ try{ parseFacturas(ev.target.result); }catch(err){ alert('No pude leer el archivo de facturas. Revisa que sea la Consulta de Facturas de SAIT.'); console.error(err); } };
+  r.readAsArrayBuffer(f);
+});
+
+function parseFacturas(buf){
+  const wb=XLSX.read(new Uint8Array(buf),{type:'array'});
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const rows=XLSX.utils.sheet_to_json(ws,{header:1,raw:true,defval:''});
+  let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toLowerCase()==='folio'));
+  if(hi<0) throw new Error('sin header facturas');
+  const h=rows[hi].map(c=>String(c).trim().toLowerCase());
+  const ix=n=>h.indexOf(n);
+  const iFolio=ix('folio'), iTotal=ix('total'), iCli=ix('cliente');
+  facturas = rows.slice(hi+1)
+    .filter(r=> r.length && (Number(r[iTotal])||0) > 0)
+    .map(r=>({ folio:String(r[iFolio]||'').trim(), total:Number(r[iTotal])||0, cliente:String(r[iCli]||'').trim(), usada:false }));
+  revisarFacturacion();
+  render();
+}
+
+// Cruza cada venta con tarjeta/transferencia contra una factura por monto
+function buscarFactura(monto){
+  if(!facturas) return null;
+  const f=facturas.find(x=>!x.usada && near(x.total,monto));
+  if(f){ f.usada=true; return f; }
+  return null;
+}
+
+function revisarFacturacion(){
+  if(facturas) facturas.forEach(f=>f.usada=false);
+  let totalTT=0, sinFact=0; const faltantes=[];
+  const orden=[...cortes].sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha)));
+  orden.forEach(c=>{
+    const ventas=(ventasPorCorte[String(c.id_corte)]||[]).filter(v=>['TD','TC','TR'].includes(v.tipo));
+    c._sinFact=0; c._nTT=ventas.length;
+    ventas.forEach(v=>{
+      totalTT++;
+      v._fact = facturas ? buscarFactura(v.monto) : null;
+      if(facturas && !v._fact){ c._sinFact++; sinFact++; faltantes.push({fecha:c.fecha,tipo:v.tipo,monto:v.monto,folio:v.folio}); }
+    });
+  });
+  pintarResumenFact(totalTT, sinFact, faltantes);
+}
+
+function pintarResumenFact(total, sin, faltantes){
+  const el=$('resumenFact');
+  if(!facturas){ el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  if(sin===0){
+    el.innerHTML='<div class="fact-ok">✓ Todo facturado — '+total+' ventas con tarjeta/transferencia, todas con su factura.</div>';
+    return;
+  }
+  let html='<div class="fact-bad">⚠️ Faltan '+sin+' de '+total+' por facturar</div><div class="fact-lista">';
+  faltantes.sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha))).forEach(f=>{
+    const nom=f.tipo==='TD'?'Débito':(f.tipo==='TC'?'Crédito':'Transferencia');
+    html+='<div class="fact-item"><span>'+f.fecha+' · '+nom+' · #'+f.folio+'</span><b class="num">'+fmt(f.monto)+'</b></div>';
+  });
+  el.innerHTML=html+'</div>';
 }
 
 function parseBBVA(buf){
@@ -317,7 +406,13 @@ function render(){
     if(Number(c.transferencia)>0) l2+=' · Tr '+fmt(c.transferencia);
     mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+l2+'</div>';
     const tot=document.createElement('div'); tot.className='corte-tot';
-    tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div><div class="s">'+(c.n_vouchers||0)+' vouchers</div>';
+    let factInfo='';
+    if(facturas && c._nTT>0){
+      factInfo = c._sinFact>0
+        ? '<div class="s" style="color:var(--red);font-weight:700">⚠ '+c._sinFact+' sin facturar</div>'
+        : '<div class="s" style="color:var(--green)">✓ facturado</div>';
+    }
+    tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div><div class="s">'+(c.n_vouchers||0)+' vouchers</div>'+factInfo;
     const chev=document.createElement('div'); chev.className='chev'; chev.textContent='▸';
     row.append(est,mid,tot,chev);
 
@@ -337,14 +432,18 @@ function llenarDetalle(det,c,k){
     if(td>0) html+='<div class="conc-line '+(c._mTD?'ok':'bad')+'">'+(c._mTD?'✓':'!')+' Débito '+fmt(td)+' — '+(c._mTD?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
     if(tc>0) html+='<div class="conc-line '+(c._mTC?'ok':'bad')+'">'+(c._mTC?'✓':'!')+' Crédito '+fmt(tc)+' — '+(c._mTC?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
   }
-  const ventas = (ventasPorCorte[k]||[]).filter(v=>v.tipo==='TD'||v.tipo==='TC');
-  if(!ventas.length) html+='<div style="font-size:12.5px;color:var(--ink-soft)">Sin ventas con tarjeta en este corte.</div>';
+  const ventas = (ventasPorCorte[k]||[]).filter(v=>v.tipo==='TD'||v.tipo==='TC'||v.tipo==='TR');
+  if(!ventas.length) html+='<div style="font-size:12.5px;color:var(--ink-soft)">Sin ventas con tarjeta o transferencia en este corte.</div>';
   ventas.forEach(v=>{
-    const cls = v.tipo==='TC'?'tc':'td';
+    const cls = v.tipo==='TC'?'tc':(v.tipo==='TD'?'td':'tr');
+    let factTag='';
+    if(facturas) factTag = v._fact
+      ? '<span class="fbadge ok">🧾 '+v._fact.folio+'</span>'
+      : '<span class="fbadge bad">sin factura</span>';
     html+='<div class="drow"><div class="tag '+cls+'">'+v.tipo+'</div>'+
-      '<div class="dm">#'+v.folio+' · '+(v.hora||'')+'</div>'+
+      '<div class="dm">#'+v.folio+' · '+(v.hora||'')+factTag+'</div>'+
       '<div class="dmonto num">'+fmt(v.monto)+'</div>'+
-      (v.voucher_id?'<button class="vsmall" data-vid="'+v.voucher_id+'">📷 ver</button>':'<span style="font-size:11.5px;color:var(--red)">sin voucher</span>')+
+      (v.voucher_id?'<button class="vsmall" data-vid="'+v.voucher_id+'">📷 ver</button>':'<span style="font-size:11.5px;color:var(--ink-soft)">—</span>')+
       '</div>';
   });
   det.innerHTML=html;
