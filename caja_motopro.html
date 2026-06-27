@@ -88,6 +88,17 @@
   .fact-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 13px;font-size:13.5px;border-bottom:1px solid var(--line);background:#fff}
   .fact-item:last-child{border-bottom:none}
   .fact-item b{color:var(--red)}
+  .cotejo{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .cot-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px}
+  .cot-count{font-size:13px;color:var(--ink-soft);margin-bottom:8px}
+  .cot-count b{color:var(--ink)}
+  .cot-ok{background:var(--green-soft);color:var(--green);border-radius:9px;padding:9px 11px;font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .cot-bad{background:var(--red-soft);color:var(--red);border-radius:9px;padding:9px 11px;font-size:12.5px;font-weight:700;margin-bottom:8px}
+  .cot-wait{background:var(--gray-soft);color:var(--ink-soft);border-radius:9px;padding:9px 11px;font-size:12.5px;font-weight:600;margin-bottom:8px}
+  .extra-item{display:flex;align-items:center;gap:10px;padding:7px 0;font-size:12.5px;color:var(--ink-soft)}
+  .extra-item span{flex:1}
+  .extra-item .x{border:none;background:var(--red-soft);color:var(--red);width:24px;height:24px;border-radius:6px;cursor:pointer;font-weight:700}
+  .cot-add{margin-top:4px}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
@@ -163,7 +174,7 @@
 const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
 
 const $ = id => document.getElementById(id);
-let cortes=[], facturas=null;
+let cortes=[], facturas=null, abiertos=new Set();
 const fmt = n => '$' + (n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 if(!API_URL) $('avisoConfig').classList.remove('hidden');
@@ -215,7 +226,7 @@ function parseSait(buf){
 
   cortes=Object.values(grupos).map(g=>({
     lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
-    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'),
+    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[],
     totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
     total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
   }));
@@ -230,6 +241,8 @@ function render(){
   $('listaTitulo').textContent = n===1 ? '1 día detectado' : n+' días detectados';
   $('listaTotal').textContent = 'Total ' + fmt(totalGral);
 
+  if(n===1) abiertos.add(cortes[0].lote);
+
   cortes.forEach((c,idx)=>{
     const wrap=document.createElement('div'); wrap.className='corte'+(c.tarjeta.length?' tiene-tarjeta':'');
     const row=document.createElement('div'); row.className='crow';
@@ -237,7 +250,8 @@ function render(){
     mid.innerHTML='<div class="l1">'+c.fecha+'</div><div class="l2">Corte '+c.lote+' · '+c.ventas.length+' ventas</div>';
     const tot=document.createElement('div'); tot.className='ctot';
     let badge='';
-    if(c.tarjeta.length===0) badge='<div class="vbadge none">sin tarjeta</div>';
+    if(c.extras.length>0) badge='<div class="vbadge pend">⚠ '+c.extras.length+' de más</div>';
+    else if(c.tarjeta.length===0) badge='<div class="vbadge none">sin tarjeta</div>';
     else { const conV=c.tarjeta.filter(v=>v.voucher).length;
       badge='<div class="vbadge '+(conV===c.tarjeta.length?'done':'pend')+'">'+conV+'/'+c.tarjeta.length+' vouchers</div>'; }
     tot.innerHTML='<div class="t num">'+fmt(c.total)+'</div>'+badge;
@@ -245,7 +259,9 @@ function render(){
     row.append(mid,tot,chev);
 
     const det=document.createElement('div'); det.className='cdet';
-    row.onclick=()=>{ const o=det.classList.toggle('open'); chev.textContent=o?'▾':'▸'; };
+    const abierto=abiertos.has(c.lote);
+    if(abierto){ det.classList.add('open'); chev.textContent='▾'; }
+    row.onclick=()=>{ if(abiertos.has(c.lote)) abiertos.delete(c.lote); else abiertos.add(c.lote); render(); };
     llenarDet(det,c);
     wrap.append(row,det);
     cont.appendChild(wrap);
@@ -255,7 +271,6 @@ function render(){
   if(facturas) revisarFacturacion();
   $('savebar').classList.remove('hidden');
   resetBtn();
-  if(n===1){ const d=cont.querySelector('.cdet'); if(d){d.classList.add('open'); cont.querySelector('.chev').textContent='▾';} }
 }
 
 function llenarDet(det,c){
@@ -267,8 +282,44 @@ function llenarDet(det,c){
   if(c.totOtro) chips+='<span class="chip">Otros '+fmt(c.totOtro)+'</span>';
   chips+='</div>';
   det.innerHTML=chips;
-  if(c.tarjeta.length===0){ det.innerHTML+='<div class="empty">Sin ventas con tarjeta.</div>'; return; }
-  c.tarjeta.forEach(v=>det.appendChild(ventaRow(v,c)));
+  if(c.tarjeta.length>0) c.tarjeta.forEach(v=>det.appendChild(ventaRow(v,c)));
+  else det.innerHTML+='<div class="empty">Sin ventas con tarjeta en SAIT.</div>';
+  det.appendChild(cotejoVouchers(c,det));
+}
+
+function cotejoVouchers(c,det){
+  const box=document.createElement('div'); box.className='cotejo';
+  const conV=c.tarjeta.filter(v=>v.voucher).length;
+  const totalVouchers=conV+c.extras.length;
+
+  let estado='';
+  if(c.extras.length>0)
+    estado='<div class="cot-bad">⚠️ '+c.extras.length+' voucher(s) de más — esos pagos con tarjeta quedaron como EFECTIVO en SAIT. Hay que corregirlos.</div>';
+  else if(c.tarjeta.length>0 && conV===c.tarjeta.length)
+    estado='<div class="cot-ok">✓ Cuadra: '+totalVouchers+' voucher(s) para '+c.tarjeta.length+' venta(s) con tarjeta.</div>';
+  else if(c.tarjeta.length>0)
+    estado='<div class="cot-wait">Faltan '+(c.tarjeta.length-conV)+' voucher(s) por subir de las tarjetas registradas.</div>';
+
+  let extrasHtml='';
+  c.extras.forEach((e,i)=>{
+    extrasHtml+='<div class="extra-item"><img class="thumb" src="'+e.voucher+'"><span>Voucher sin venta de tarjeta</span><button class="x" data-i="'+i+'">✕</button></div>';
+  });
+
+  box.innerHTML=
+    '<div class="cot-head">Cotejo de vouchers del día</div>'+
+    '<div class="cot-count">Tarjetas en SAIT: <b>'+c.tarjeta.length+'</b> · Vouchers: <b>'+totalVouchers+'</b></div>'+
+    estado+ extrasHtml+
+    '<button class="vbtn cot-add">📷 Voucher que quedó como efectivo</button>';
+
+  box.querySelector('.cot-add').onclick=ev=>{ ev.stopPropagation(); pickVoucherExtra(c); };
+  box.querySelectorAll('.x').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); c.extras.splice(Number(b.dataset.i),1); render(); });
+  return box;
+}
+
+function pickVoucherExtra(c){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, d=>{ c.extras.push({voucher:d}); render(); }); };
+  inp.click();
 }
 
 function ventaRow(v,c){
@@ -381,6 +432,7 @@ $('btnGuardar').addEventListener('click', async ()=>{
       corte:{ id_corte:c.lote, fecha:c.fechaISO, sucursal:'Moto Pro',
               efectivo:c.totEF, debito:c.totTD, credito:c.totTC, transferencia:c.totTR, total:c.total, capturado_por:nombre },
       ventas:c.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto, voucherB64:v.voucher||'' }))
+        .concat(c.extras.map((e,i)=>({ folio:'EXTRA'+(i+1), hora:'', tipo:'EXTRA', cliente:'Voucher sin venta de tarjeta (revisar SAIT)', monto:0, voucherB64:e.voucher })))
     };
     try{ const res=await fetch(API_URL,{method:'POST',body:JSON.stringify(payload)}); const data=await res.json(); data.ok?ok++:fail.push(c.lote); }
     catch(err){ fail.push(c.lote); console.error(err); }
