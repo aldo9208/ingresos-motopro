@@ -366,10 +366,14 @@ function parseBBVA(buf){
 // ---- Conciliar ----
 function conciliar(){
   if(bbva) bbva.lotes.forEach(l=>l.usado=false);
-  // de más antiguo a más nuevo para consumir lotes en orden
   const orden = [...cortes].sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha)));
+  const nuevos=[];
   orden.forEach(c=>{
     const td=Number(c.debito)||0, tc=Number(c.credito)||0;
+    // Si ya quedó guardado como conciliado, se respeta aunque no haya BBVA cargado
+    if(String(c.estado||'').toLowerCase()==='conciliado'){
+      c._estado='ok'; c._mTD = td>0?true:'na'; c._mTC = tc>0?true:'na'; return;
+    }
     c._mTD = td>0 ? consumir('TD',td) : 'na';
     c._mTC = tc>0 ? consumir('TC',tc) : 'na';
     if(td===0 && tc===0) c._estado='nt';
@@ -378,8 +382,15 @@ function conciliar(){
       const faltaTD = td>0 && !c._mTD;
       const faltaTC = tc>0 && !c._mTC;
       c._estado = (!faltaTD && !faltaTC) ? 'ok' : 'pend';
+      if(c._estado==='ok'){ c.estado='conciliado'; nuevos.push(String(c.id_corte)); }
     }
   });
+  if(nuevos.length) persistirConciliados(nuevos);
+}
+
+async function persistirConciliados(ids){
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'marcar_conciliados',ids})}); }
+  catch(err){ console.error('No se pudo guardar la conciliación:',err); }
 }
 function consumir(tipo,monto){
   if(!bbva) return false;
