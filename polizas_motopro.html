@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pólizas COI · Moto Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --ink:#262219;--ink-soft:#6B6457;--line:#E6E1D6;--bg:#FAF9F5;--card:#FFFFFF;
+    --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--green-soft:#E5F1EA;
+    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;--gray-soft:#F0EEE8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:15px;line-height:1.45;-webkit-font-smoothing:antialiased}
+  .num{font-variant-numeric:tabular-nums}
+  header{background:var(--card);border-bottom:1px solid var(--line);padding:16px 0}
+  header .wrap{display:flex;align-items:center;gap:12px}
+  .logo{width:40px;height:40px;border-radius:11px;background:var(--ink);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;letter-spacing:-.5px}
+  h1{font-size:18px;font-weight:750;letter-spacing:-.3px}
+  .sub{font-size:12.5px;color:var(--ink-soft)}
+  .wrap{max-width:780px;margin:0 auto;padding:0 18px}
+  section{margin-top:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+  .eyebrow{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px}
+  .drop{display:flex;flex-direction:column;align-items:center;gap:5px;border:1.5px dashed var(--line);border-radius:13px;padding:26px 16px;text-align:center;cursor:pointer;transition:.15s;background:#FCFBF8}
+  .drop:hover{border-color:var(--blue);background:var(--blue-soft)}
+  .drop input{display:none}
+  .drop .ic{font-size:26px}
+  .drop b{font-size:15px}
+  .drop small{font-size:12px;color:var(--ink-soft)}
+  .cfg{display:flex;align-items:center;gap:10px;margin-top:14px;flex-wrap:wrap}
+  .cfg label{font-size:13px;color:var(--ink-soft);font-weight:600}
+  .cfg input[type=date]{border:1px solid var(--line);border-radius:9px;padding:8px 10px;font-family:inherit;font-size:14px}
+  .btn{border:none;background:var(--ink);color:#fff;border-radius:10px;padding:11px 18px;font-size:14px;font-weight:650;font-family:inherit;cursor:pointer}
+  .btn:disabled{opacity:.5}
+  .btn-x{border:1px solid var(--line);background:#fff;color:var(--ink)}
+  .resumen{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:6px}
+  .resumen .b{border:1px solid var(--line);border-radius:10px;padding:10px;background:#FCFBF8}
+  .resumen .b .l{font-size:10.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px}
+  .resumen .b .v{font-size:16px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+  @media(max-width:560px){ .resumen{grid-template-columns:repeat(2,1fr)} }
+  .pol{border:1px solid var(--line);border-radius:13px;overflow:hidden;margin-top:14px}
+  .pol-head{padding:12px 14px;font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center}
+  .pol-head.tar{background:var(--blue-soft);color:var(--blue)}
+  .pol-head.efe{background:var(--green-soft);color:var(--green)}
+  .pol-head.dep{background:var(--amber-soft);color:var(--amber)}
+  .pol-head .tag{font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:rgba(0,0,0,.06)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 14px;text-align:left;border-top:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--ink-soft);font-weight:600;background:#FCFBF8}
+  td.r,th.r{text-align:right}
+  .cta{font-size:12px;color:var(--ink-soft)}
+  .grp{border-top:2px solid var(--line)}
+  tfoot td{font-weight:700;background:#FCFBF8;border-top:2px solid var(--line)}
+  .ok-cuadre{color:var(--green)} .bad-cuadre{color:var(--red)}
+  .warn{background:var(--amber-soft);color:var(--amber);border-radius:10px;padding:11px 13px;font-size:13px;font-weight:600;margin-top:12px}
+  .empty{color:var(--ink-soft);font-size:13.5px;text-align:center;padding:14px}
+  .actions{display:flex;gap:10px;margin-top:16px;flex-wrap:wrap}
+  .foot{font-size:11.5px;color:var(--ink-soft);text-align:center;margin:20px 0;line-height:1.5}
+  .hidden{display:none}
+  .dia-sep{font-size:12.5px;font-weight:700;color:var(--ink);margin:18px 0 4px;padding-top:6px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="logo">MP</div>
+    <div>
+      <h1>Pólizas COI</h1>
+      <div class="sub">Facturas (XML) → propuesta de póliza</div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <section>
+    <div class="card">
+      <div class="eyebrow">Cargar facturas</div>
+      <label class="drop">
+        <input type="file" id="fileXML" accept=".xml" multiple>
+        <div class="ic">🧾</div>
+        <b>Subir los XML del día</b>
+        <small>Puedes seleccionar varios a la vez</small>
+      </label>
+      <div class="cfg">
+        <label>Fecha del depósito (día siguiente):</label>
+        <input type="date" id="fechaDep">
+        <span class="cta">se aplica a la póliza de depósito</span>
+      </div>
+    </div>
+  </section>
+
+  <section id="secResultado" class="hidden">
+    <div class="card">
+      <div class="eyebrow">Resumen</div>
+      <div class="resumen">
+        <div class="b"><div class="l">Facturas leídas</div><div class="v num" id="rNum">0</div></div>
+        <div class="b"><div class="l">Tarjeta / transfer</div><div class="v num" id="rTar">0</div></div>
+        <div class="b"><div class="l">Efectivo (global)</div><div class="v num" id="rEfe">0</div></div>
+        <div class="b"><div class="l">Total facturado</div><div class="v num" id="rTot">$0</div></div>
+      </div>
+      <div id="avisos"></div>
+      <div id="polizas"></div>
+      <div class="actions">
+        <button class="btn" id="btnExcel">⬇ Descargar Excel</button>
+        <button class="btn btn-x" id="btnOtra">Cargar otras facturas</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot" id="foot">
+    Cuentas: 1110 Caja General · 1120 BBVA Bancomer · 2190 IVA 16% cobrado · 4100 Ventas al 16%.<br>
+    El Excel es para revisar/capturar. El archivo de importación directa a COI se agrega con tu plantilla.
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const CTAS={ caja:'1110-001-0001', bbva:'1120-001-0001', iva:'2190-001-0001', ventas:'4100-001-0000' };
+const NOM={ '1110-001-0001':'Caja General', '1120-001-0001':'BBVA Bancomer', '2190-001-0001':'IVA 16% cobrado', '4100-001-0000':'Ventas al 16%' };
+const TARJ=new Set(['04','28','05']), TRANSF=new Set(['03']), EFVO=new Set(['01']);
+const fmt=n=>'$'+(Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const r2=n=>Math.round((Number(n)||0)*100)/100;
+
+let dias=[]; // [{fecha, tarjetas:[], efectivo:[], otros:[]}]
+
+$('fileXML').addEventListener('change', async e=>{
+  const files=[...e.target.files]; if(!files.length) return;
+  const facturas=[];
+  for(const f of files){
+    try{ facturas.push(parseXML(await f.text())); }
+    catch(err){ console.error('XML inválido:', f.name, err); }
+  }
+  agrupar(facturas);
+  render();
+});
+
+function parseXML(txt){
+  const doc=new DOMParser().parseFromString(txt,'application/xml');
+  const comp=doc.documentElement;
+  const g=a=>comp.getAttribute(a)||'';
+  const sub=parseFloat(g('SubTotal'))||0;
+  const desc=parseFloat(g('Descuento'))||0;
+  const tot=parseFloat(g('Total'))||0;
+  let iva=0;
+  const imp=comp.getElementsByTagName('*');
+  for(const n of imp){ if(n.localName==='Impuestos' && n.getAttribute('TotalImpuestosTrasladados')!=null && n.parentNode===comp){ iva=parseFloat(n.getAttribute('TotalImpuestosTrasladados'))||0; break; } }
+  if(!iva) iva=r2(tot-(sub-desc));
+  let uuid='';
+  for(const n of imp){ if(n.localName==='TimbreFiscalDigital'){ uuid=n.getAttribute('UUID')||''; break; } }
+  return { folio:(g('Serie')||'')+(g('Folio')||''), fecha:(g('Fecha')||'').slice(0,10),
+           forma:g('FormaPago'), sub:r2(sub-desc), iva:r2(iva), total:r2(tot), uuid };
+}
+
+function agrupar(facturas){
+  const map={};
+  facturas.forEach(f=>{
+    if(!map[f.fecha]) map[f.fecha]={fecha:f.fecha, tarjetas:[], efectivo:[], otros:[]};
+    if(TARJ.has(f.forma)||TRANSF.has(f.forma)) map[f.fecha].tarjetas.push(f);
+    else if(EFVO.has(f.forma)) map[f.fecha].efectivo.push(f);
+    else map[f.fecha].otros.push(f);
+  });
+  dias=Object.values(map).sort((a,b)=>a.fecha.localeCompare(b.fecha));
+}
+
+function masUnDia(iso){ const d=new Date(iso+'T12:00:00'); d.setDate(d.getDate()+1); return d.toISOString().slice(0,10); }
+
+function render(){
+  $('secResultado').classList.remove('hidden');
+  const todas=dias.flatMap(d=>[...d.tarjetas,...d.efectivo,...d.otros]);
+  const nTar=dias.reduce((s,d)=>s+d.tarjetas.length,0);
+  const nEfe=dias.reduce((s,d)=>s+d.efectivo.length,0);
+  $('rNum').textContent=todas.length;
+  $('rTar').textContent=nTar;
+  $('rEfe').textContent=nEfe;
+  $('rTot').textContent=fmt(todas.reduce((s,f)=>s+f.total,0));
+
+  // fecha de depósito por defecto = día siguiente del último día
+  if(dias.length && !$('fechaDep').value) $('fechaDep').value=masUnDia(dias[dias.length-1].fecha);
+
+  const otros=dias.flatMap(d=>d.otros);
+  $('avisos').innerHTML = otros.length
+    ? '<div class="warn">⚠️ '+otros.length+' factura(s) con forma de pago distinta a efectivo/tarjeta/transferencia. Revísalas aparte (están al final del Excel).</div>'
+    : '';
+
+  const cont=$('polizas'); cont.innerHTML='';
+  dias.forEach(d=>{
+    if(dias.length>1){ const sep=document.createElement('div'); sep.className='dia-sep'; sep.textContent='Día '+d.fecha; cont.appendChild(sep); }
+    if(d.tarjetas.length) cont.appendChild(polizaTarjetas(d));
+    if(d.efectivo.length) cont.appendChild(polizaEfectivo(d));
+    if(d.efectivo.length) cont.appendChild(polizaDeposito(d));
+  });
+}
+
+function tablaPol(clase, titulo, tag, filas, totCargo, totAbono){
+  const wrap=document.createElement('div'); wrap.className='pol';
+  const cuadra=Math.abs(totCargo-totAbono)<0.01;
+  let html='<div class="pol-head '+clase+'">'+titulo+'<span class="tag">'+tag+'</span></div>'+
+    '<table><thead><tr><th>Cuenta</th><th>Concepto</th><th class="r">Cargo</th><th class="r">Abono</th></tr></thead><tbody>';
+  filas.forEach(f=>{
+    html+='<tr'+(f.grp?' class="grp"':'')+'><td>'+f.cta+' · '+NOM[f.cta]+'</td><td class="cta">'+(f.con||'')+'</td>'+
+      '<td class="r num">'+(f.cargo?fmt(f.cargo):'')+'</td><td class="r num">'+(f.abono?fmt(f.abono):'')+'</td></tr>';
+  });
+  html+='</tbody><tfoot><tr><td colspan="2" class="'+(cuadra?'ok-cuadre':'bad-cuadre')+'">'+(cuadra?'✓ Cuadra':'⚠ No cuadra')+
+    '</td><td class="r num">'+fmt(totCargo)+'</td><td class="r num">'+fmt(totAbono)+'</td></tr></tfoot></table>';
+  wrap.innerHTML=html;
+  return wrap;
+}
+
+function polizaTarjetas(d){
+  const filas=[]; let tc=0,ta=0;
+  d.tarjetas.forEach(f=>{
+    filas.push({cta:CTAS.bbva, con:'Fac '+f.folio, cargo:f.total, grp:true});
+    filas.push({cta:CTAS.ventas, con:'Base', abono:f.sub});
+    filas.push({cta:CTAS.iva, con:'IVA', abono:f.iva});
+    tc+=f.total; ta+=f.sub+f.iva;
+  });
+  return tablaPol('tar','Póliza de tarjetas — '+d.fecha,'Ig · '+d.tarjetas.length+' facturas',filas,r2(tc),r2(ta));
+}
+
+function polizaEfectivo(d){
+  const filas=[]; let tc=0,ta=0;
+  d.efectivo.forEach(f=>{
+    filas.push({cta:CTAS.caja, con:'Global '+f.folio, cargo:f.total, grp:true});
+    filas.push({cta:CTAS.ventas, con:'Base', abono:f.sub});
+    filas.push({cta:CTAS.iva, con:'IVA', abono:f.iva});
+    tc+=f.total; ta+=f.sub+f.iva;
+  });
+  return tablaPol('efe','Póliza de efectivo (global) — '+d.fecha,'Ig',filas,r2(tc),r2(ta));
+}
+
+function polizaDeposito(d){
+  const monto=r2(d.efectivo.reduce((s,f)=>s+f.total,0));
+  const fdep=$('fechaDep').value || masUnDia(d.fecha);
+  const filas=[
+    {cta:CTAS.bbva, con:'Depósito ventas '+d.fecha, cargo:monto, grp:true},
+    {cta:CTAS.caja, con:'Traspaso a banco', abono:monto}
+  ];
+  return tablaPol('dep','Póliza de depósito — '+fdep,'Dr',filas,monto,monto);
+}
+
+// ---- Excel ----
+$('btnExcel').addEventListener('click', ()=>{
+  const rows=[['TIPO PÓLIZA','FECHA','CONCEPTO','CUENTA','NOMBRE','CARGO','ABONO','REFERENCIA','UUID']];
+  dias.forEach(d=>{
+    if(d.tarjetas.length){
+      d.tarjetas.forEach(f=>{
+        rows.push(['Ig',d.fecha,'Cobro con tarjeta',CTAS.bbva,NOM[CTAS.bbva],f.total,'',f.folio,f.uuid]);
+        rows.push(['Ig',d.fecha,'Ventas',CTAS.ventas,NOM[CTAS.ventas],'',f.sub,f.folio,f.uuid]);
+        rows.push(['Ig',d.fecha,'IVA cobrado',CTAS.iva,NOM[CTAS.iva],'',f.iva,f.folio,f.uuid]);
+      });
+      rows.push(['FIN_PARTIDAS','','','','','','','','']);
+    }
+    if(d.efectivo.length){
+      d.efectivo.forEach(f=>{
+        rows.push(['Ig',d.fecha,'Venta efectivo (global)',CTAS.caja,NOM[CTAS.caja],f.total,'',f.folio,f.uuid]);
+        rows.push(['Ig',d.fecha,'Ventas',CTAS.ventas,NOM[CTAS.ventas],'',f.sub,f.folio,f.uuid]);
+        rows.push(['Ig',d.fecha,'IVA cobrado',CTAS.iva,NOM[CTAS.iva],'',f.iva,f.folio,f.uuid]);
+      });
+      rows.push(['FIN_PARTIDAS','','','','','','','','']);
+      const monto=r2(d.efectivo.reduce((s,f)=>s+f.total,0));
+      const fdep=$('fechaDep').value || masUnDia(d.fecha);
+      rows.push(['Dr',fdep,'Depósito ventas '+d.fecha,CTAS.bbva,NOM[CTAS.bbva],monto,'','','']);
+      rows.push(['Dr',fdep,'Traspaso a banco',CTAS.caja,NOM[CTAS.caja],'',monto,'','']);
+      rows.push(['FIN_PARTIDAS','','','','','','','','']);
+    }
+    const otros=d.otros;
+    if(otros.length){
+      otros.forEach(f=>rows.push(['REVISAR',d.fecha,'Forma pago '+f.forma,'','',f.total,'',f.folio,f.uuid]));
+    }
+  });
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=[{wch:12},{wch:11},{wch:24},{wch:15},{wch:18},{wch:11},{wch:11},{wch:10},{wch:38}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Pólizas');
+  XLSX.writeFile(wb,'polizas_motopro.xlsx');
+});
+
+$('btnOtra').addEventListener('click', ()=>{ dias=[]; $('fileXML').value=''; $('secResultado').classList.add('hidden'); $('fechaDep').value=''; });
+</script>
+</body>
+</html>
