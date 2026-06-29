@@ -99,6 +99,22 @@
   .extra-item span{flex:1}
   .extra-item .x{border:none;background:var(--red-soft);color:var(--red);width:24px;height:24px;border-radius:6px;cursor:pointer;font-weight:700}
   .cot-add{margin-top:4px}
+  .deposito{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .dep-head{font-size:12px;font-weight:700;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px}
+  .dep-line{display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:10px}
+  .dep-line b{color:var(--ink)}
+  .dep-fields{display:grid;grid-template-columns:1fr 1.3fr;gap:10px;margin-bottom:10px}
+  .dep-fields label{font-size:11.5px;font-weight:600;color:var(--ink-soft)}
+  .dep-inp{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:9px;background:#FCFBF8;margin-top:4px;padding:0 9px}
+  .dep-inp input{width:100%;border:none;background:none;padding:9px 0;font-size:14px;font-family:inherit;color:var(--ink);outline:none}
+  .dep-inp span{color:var(--ink-soft);font-size:13px}
+  .dep-result{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .dep-dep,.dep-exc{border-radius:10px;padding:10px 12px}
+  .dep-dep{background:var(--green-soft)}
+  .dep-exc{background:var(--amber-soft)}
+  .dep-dep span,.dep-exc span{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
+  .dep-dep span{color:var(--green)} .dep-dep b{color:var(--green);font-size:17px}
+  .dep-exc span{color:var(--amber)} .dep-exc b{color:var(--amber);font-size:17px}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
@@ -226,7 +242,7 @@ function parseSait(buf){
 
   cortes=Object.values(grupos).map(g=>({
     lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
-    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[],
+    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[], pct_desc:20, efvo_facturado:0,
     totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
     total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
   }));
@@ -285,6 +301,41 @@ function llenarDet(det,c){
   if(c.tarjeta.length>0) c.tarjeta.forEach(v=>det.appendChild(ventaRow(v,c)));
   else det.innerHTML+='<div class="empty">Sin ventas con tarjeta en SAIT.</div>';
   det.appendChild(cotejoVouchers(c,det));
+  det.appendChild(depositoEfectivo(c));
+}
+
+function calcDeposito(c){
+  const pg = Math.max(0, c.totEF - (Number(c.efvo_facturado)||0));
+  const pct = (Number(c.pct_desc)||0)/100;
+  const exc = pg*pct;
+  const dep = pg*(1-pct) + (Number(c.efvo_facturado)||0);
+  c.deposito_efectivo = Math.round(dep*100)/100;
+  c.excedente_efvo = Math.round(exc*100)/100;
+  return {dep:c.deposito_efectivo, exc:c.excedente_efvo};
+}
+
+function depositoEfectivo(c){
+  const box=document.createElement('div'); box.className='deposito';
+  const r=calcDeposito(c);
+  box.innerHTML=
+    '<div class="dep-head">Depósito en efectivo</div>'+
+    '<div class="dep-line"><span>Efectivo del corte</span><b class="num">'+fmt(c.totEF)+'</b></div>'+
+    '<div class="dep-fields">'+
+      '<label>% descuento<div class="dep-inp"><input type="number" class="i-pct" value="'+c.pct_desc+'" step="1" inputmode="decimal"><span>%</span></div></label>'+
+      '<label>Efvo. facturado a cliente<div class="dep-inp"><span>$</span><input type="number" class="i-efvo" value="'+c.efvo_facturado+'" step="0.01" inputmode="decimal"></div></label>'+
+    '</div>'+
+    '<div class="dep-result">'+
+      '<div class="dep-dep"><span>A depositar</span><b class="num">'+fmt(r.dep)+'</b></div>'+
+      '<div class="dep-exc"><span>Excedente</span><b class="num">'+fmt(r.exc)+'</b></div>'+
+    '</div>';
+  const ipct=box.querySelector('.i-pct'), iefvo=box.querySelector('.i-efvo');
+  const upd=()=>{ c.pct_desc=Number(ipct.value)||0; c.efvo_facturado=Number(iefvo.value)||0;
+    const rr=calcDeposito(c);
+    box.querySelector('.dep-dep b').textContent=fmt(rr.dep);
+    box.querySelector('.dep-exc b').textContent=fmt(rr.exc); };
+  ipct.oninput=upd; iefvo.oninput=upd;
+  [ipct,iefvo].forEach(i=>i.onclick=ev=>ev.stopPropagation());
+  return box;
 }
 
 function cotejoVouchers(c,det){
@@ -426,11 +477,13 @@ $('btnGuardar').addEventListener('click', async ()=>{
   let ok=0; const fail=[];
   for(let i=0;i<cortes.length;i++){
     const c=cortes[i];
+    calcDeposito(c);
     b.textContent='Guardando '+(i+1)+'/'+cortes.length+'…';
     const payload={
       action:'guardar_corte',
       corte:{ id_corte:c.lote, fecha:c.fechaISO, sucursal:'Moto Pro',
-              efectivo:c.totEF, debito:c.totTD, credito:c.totTC, transferencia:c.totTR, total:c.total, capturado_por:nombre },
+              efectivo:c.totEF, debito:c.totTD, credito:c.totTC, transferencia:c.totTR, total:c.total, capturado_por:nombre,
+              pct_desc:c.pct_desc, efvo_facturado:c.efvo_facturado, deposito_efectivo:c.deposito_efectivo, excedente_efvo:c.excedente_efvo },
       ventas:c.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto, voucherB64:v.voucher||'' }))
         .concat(c.extras.map((e,i)=>({ folio:'EXTRA'+(i+1), hora:'', tipo:'EXTRA', cliente:'Voucher sin venta de tarjeta (revisar SAIT)', monto:0, voucherB64:e.voucher })))
     };
