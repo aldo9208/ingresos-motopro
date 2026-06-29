@@ -150,6 +150,18 @@
 
   <section>
     <div class="card">
+      <div class="eyebrow">Efectivo y excedente</div>
+      <div class="mes-grid">
+        <div class="b"><div class="l">Excedente acumulado</div><div class="v num" id="excAcum">$0</div></div>
+        <div class="b"><div class="l">Depósito esperado</div><div class="v num" id="depEsp">$0</div></div>
+        <div class="b"><div class="l">Depositado en BBVA</div><div class="v num" id="depReal">—</div></div>
+        <div class="b green"><div class="l">Depósitos que cuadran</div><div class="v num" id="depCuadran">—</div></div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
       <div class="topbar">
         <div class="eyebrow" style="margin:0;flex:1">3 · Cortes registrados</div>
         <button class="btn" id="btnRefrescar">↻ Refrescar</button>
@@ -256,7 +268,7 @@ async function parsePDF(buf){
 // Parser con estado: las ventas traen su monto en la misma línea;
 // la comisión y el IVA traen el monto en renglón aparte.
 function procesarBBVA(lineas){
-  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
+  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0,depositos:[],depEf:0};
   let pend=null;
   lineas.forEach(ln=>{
     const flat=ln.replace(/\s/g,'').toUpperCase();
@@ -265,8 +277,10 @@ function procesarBBVA(lineas){
     const ventaTC = flat.includes('VENTASCREDITO') && flat.includes('PUNTODEVENTA');
     const esApli = flat.includes('APLITASADEDES');
     const esIva  = flat.includes('IVATASA') && flat.includes('DESC');
+    const esDep  = flat.includes('DEPOSITOENEFECTIVO');
     if(ventaTD && montos.length){ d.totTD+=montos[0]; d.lotes.push({tipo:'TD',bruto:montos[0],usado:false}); pend=null; }
     else if(ventaTC && montos.length){ d.totTC+=montos[0]; d.lotes.push({tipo:'TC',bruto:montos[0],usado:false}); pend=null; }
+    else if(esDep && montos.length){ d.depEf+=montos[0]; d.depositos.push({monto:montos[0],usado:false}); pend=null; }
     else if(esApli || esIva){
       if(montos.length){ if(esApli) d.comi+=Math.abs(montos[0]); else d.iva+=Math.abs(montos[0]); pend=null; }
       else pend = esApli ? 'comi' : 'iva';
@@ -350,13 +364,14 @@ function parseBBVA(buf){
   let hi=rows.findIndex(r=>r.some(c=>String(c).trim().toUpperCase()==='FECHA'));
   if(hi<0) throw new Error('sin header BBVA');
   const data=rows.slice(hi+1);
-  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0};
+  const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0,depositos:[],depEf:0};
   data.forEach(r=>{
     if(!r || r[0]==null || r[0]==='') return;
     const desc=String(r[1]||'').toUpperCase();
     const abono=Number(r[2])||0, cargo=Math.abs(Number(r[3])||0);
     if(desc.includes('VENTAS DEBITO')){ d.totTD+=abono; d.lotes.push({tipo:'TD',bruto:abono,usado:false}); }
     else if(desc.includes('VENTAS CREDITO')){ d.totTC+=abono; d.lotes.push({tipo:'TC',bruto:abono,usado:false}); }
+    else if(desc.includes('DEPOSITO EN EFECTIVO')){ d.depEf+=abono; d.depositos.push({monto:abono,usado:false}); }
     else if(desc.includes('APLI TASA DE DES DEBITO')||desc.includes('APLI TASA DE DES CREDITO')) d.comi+=cargo;
     else if(desc.includes('IVA TASA DE DESC DEBITO')||desc.includes('IVA TASA DE DESC CREDITO')) d.iva+=cargo;
   });
@@ -365,27 +380,39 @@ function parseBBVA(buf){
 
 // ---- Conciliar ----
 function conciliar(){
-  if(bbva) bbva.lotes.forEach(l=>l.usado=false);
+  if(bbva){ bbva.lotes.forEach(l=>l.usado=false); bbva.depositos.forEach(d=>d.usado=false); }
   const orden = [...cortes].sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha)));
   const nuevos=[];
   orden.forEach(c=>{
     const td=Number(c.debito)||0, tc=Number(c.credito)||0;
     // Si ya quedó guardado como conciliado, se respeta aunque no haya BBVA cargado
     if(String(c.estado||'').toLowerCase()==='conciliado'){
-      c._estado='ok'; c._mTD = td>0?true:'na'; c._mTC = tc>0?true:'na'; return;
+      c._estado='ok'; c._mTD = td>0?true:'na'; c._mTC = tc>0?true:'na';
+    } else {
+      c._mTD = td>0 ? consumir('TD',td) : 'na';
+      c._mTC = tc>0 ? consumir('TC',tc) : 'na';
+      if(td===0 && tc===0) c._estado='nt';
+      else if(!bbva) c._estado='wait';
+      else {
+        const faltaTD = td>0 && !c._mTD;
+        const faltaTC = tc>0 && !c._mTC;
+        c._estado = (!faltaTD && !faltaTC) ? 'ok' : 'pend';
+        if(c._estado==='ok'){ c.estado='conciliado'; nuevos.push(String(c.id_corte)); }
+      }
     }
-    c._mTD = td>0 ? consumir('TD',td) : 'na';
-    c._mTC = tc>0 ? consumir('TC',tc) : 'na';
-    if(td===0 && tc===0) c._estado='nt';
-    else if(!bbva) c._estado='wait';
-    else {
-      const faltaTD = td>0 && !c._mTD;
-      const faltaTC = tc>0 && !c._mTC;
-      c._estado = (!faltaTD && !faltaTC) ? 'ok' : 'pend';
-      if(c._estado==='ok'){ c.estado='conciliado'; nuevos.push(String(c.id_corte)); }
-    }
+    // Depósito en efectivo esperado vs banco
+    const depEsp = Number(c.deposito_efectivo)||0;
+    c._depEsp = depEsp;
+    c._depOk = (depEsp>0 && bbva) ? consumirDeposito(depEsp) : null;
   });
   if(nuevos.length) persistirConciliados(nuevos);
+}
+
+function consumirDeposito(monto){
+  if(!bbva) return false;
+  const d = bbva.depositos.find(x=>!x.usado && near(x.monto,monto));
+  if(d){ d.usado=true; return true; }
+  return false;
 }
 
 async function persistirConciliados(ids){
@@ -432,6 +459,18 @@ function render(){
     wrap.append(row,det);
     cont.appendChild(wrap);
   });
+  pintarEfectivo();
+}
+
+function pintarEfectivo(){
+  const excAcum = cortes.reduce((s,c)=>s+(Number(c.excedente_efvo)||0),0);
+  const depEspTot = cortes.reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
+  const conDep = cortes.filter(c=>(Number(c.deposito_efectivo)||0)>0).length;
+  const cuadran = cortes.filter(c=>c._depOk).length;
+  $('excAcum').textContent=fmt(excAcum);
+  $('depEsp').textContent=fmt(depEspTot);
+  $('depReal').textContent= bbva ? fmt(bbva.depEf) : '—';
+  $('depCuadran').textContent = bbva ? (cuadran+'/'+conDep) : '—';
 }
 
 function llenarDetalle(det,c,k){
@@ -442,6 +481,14 @@ function llenarDetalle(det,c,k){
   if(bbva && (td>0||tc>0)){
     if(td>0) html+='<div class="conc-line '+(c._mTD?'ok':'bad')+'">'+(c._mTD?'✓':'!')+' Débito '+fmt(td)+' — '+(c._mTD?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
     if(tc>0) html+='<div class="conc-line '+(c._mTC?'ok':'bad')+'">'+(c._mTC?'✓':'!')+' Crédito '+fmt(tc)+' — '+(c._mTC?'encontrado en BBVA':'no aparece en el estado de cuenta')+'</div>';
+  }
+  const depEsp = Number(c.deposito_efectivo)||0;
+  if(depEsp>0){
+    if(bbva){
+      html+='<div class="conc-line '+(c._depOk?'ok':'bad')+'">'+(c._depOk?'✓':'!')+' Depósito efectivo '+fmt(depEsp)+' — '+(c._depOk?'encontrado en BBVA':'no aparece como depósito')+'</div>';
+    } else {
+      html+='<div class="conc-line" style="background:var(--gray-soft);color:var(--ink-soft)">Depósito esperado '+fmt(depEsp)+' · excedente '+fmt(Number(c.excedente_efvo)||0)+'</div>';
+    }
   }
   const ventas = (ventasPorCorte[k]||[]).filter(v=>v.tipo==='TD'||v.tipo==='TC'||v.tipo==='TR');
   if(!ventas.length) html+='<div style="font-size:12.5px;color:var(--ink-soft)">Sin ventas con tarjeta o transferencia en este corte.</div>';
