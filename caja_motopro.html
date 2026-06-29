@@ -119,6 +119,16 @@
   .ficha-ok{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--green);font-weight:600}
   .ficha-ok span{flex:1}
   .ficha-ok .x{border:none;background:var(--red-soft);color:var(--red);width:24px;height:24px;border-radius:6px;cursor:pointer;font-weight:700}
+  .pend-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .pend-sub{font-size:11.5px;color:var(--ink-soft);margin-top:2px}
+  .btn-sec{border:1px solid var(--line);background:#fff;border-radius:9px;padding:8px 14px;font-size:13px;font-weight:600;font-family:inherit;color:var(--ink);cursor:pointer}
+  .pend-item{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .pend-item:first-child{margin-top:10px}
+  .pend-item .pi-info{flex:1}
+  .pend-item .pi-info b{display:block}
+  .pend-item .pi-info span{font-size:11.5px;color:var(--ink-soft)}
+  .pend-item .pi-btn{border:none;background:var(--blue-soft);color:var(--blue);border-radius:8px;padding:8px 12px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;white-space:nowrap}
+  .pend-empty{font-size:12.5px;color:var(--ink-soft);margin-top:10px}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
@@ -138,6 +148,19 @@
 <div class="wrap">
 
   <div id="avisoConfig" class="config hidden">⚠️ Falta pegar la liga del backend (API_URL). Avísale a Aldo.</div>
+
+  <section>
+    <div class="card">
+      <div class="pend-head">
+        <div>
+          <div class="eyebrow" style="margin:0">Fichas de depósito pendientes</div>
+          <div class="pend-sub">Para el depósito que hiciste al día siguiente</div>
+        </div>
+        <button class="btn-sec" id="btnCargarPend">Buscar</button>
+      </div>
+      <div id="listaPend"></div>
+    </div>
+  </section>
 
   <section>
     <div class="card">
@@ -198,6 +221,48 @@ let cortes=[], facturas=null, abiertos=new Set();
 const fmt = n => '$' + (n||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 
 if(!API_URL) $('avisoConfig').classList.remove('hidden');
+
+// ---- Fichas de depósito pendientes ----
+$('btnCargarPend').addEventListener('click', cargarPendientes);
+
+async function cargarPendientes(){
+  const cont=$('listaPend'), btn=$('btnCargarPend');
+  btn.textContent='Buscando…'; btn.disabled=true;
+  try{
+    const res=await fetch(API_URL+'?action=obtener_cortes');
+    const data=await res.json();
+    const sinFicha=(data.cortes||[]).filter(c=>!String(c.ficha_deposito||'').trim() || String(c.ficha_deposito).startsWith('ERROR'));
+    sinFicha.sort((a,b)=>String(b.fecha).localeCompare(String(a.fecha)));
+    if(!sinFicha.length){ cont.innerHTML='<div class="pend-empty">✓ Todos los cortes ya tienen su ficha.</div>'; }
+    else {
+      cont.innerHTML='';
+      sinFicha.slice(0,15).forEach(c=>{
+        const it=document.createElement('div'); it.className='pend-item';
+        it.innerHTML='<div class="pi-info"><b>'+(c.fecha||'')+'</b><span>Corte '+c.id_corte+' · depósito '+fmt(Number(c.deposito_efectivo)||0)+'</span></div>'+
+                     '<button class="pi-btn">📷 Subir ficha</button>';
+        it.querySelector('.pi-btn').onclick=()=>subirFichaPendiente(c, it);
+        cont.appendChild(it);
+      });
+    }
+  }catch(err){ cont.innerHTML='<div class="pend-empty">No se pudo conectar. Revisa tu internet e intenta de nuevo.</div>'; }
+  btn.textContent='Buscar'; btn.disabled=false;
+}
+
+function subirFichaPendiente(c, item){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return;
+    comprimirFoto(f, async d=>{
+      const btn=item.querySelector('.pi-btn'); btn.textContent='Subiendo…'; btn.disabled=true;
+      try{
+        const res=await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'agregar_ficha', id_corte:c.id_corte, ficha_b64:d})});
+        const data=await res.json();
+        if(data.ok){ item.innerHTML='<div class="pi-info"><b>'+(c.fecha||'')+'</b><span style="color:var(--green)">✓ Ficha subida</span></div>'; }
+        else { btn.textContent='Reintentar'; btn.disabled=false; alert('No se pudo guardar: '+(data.error||'')); }
+      }catch(err){ btn.textContent='Reintentar'; btn.disabled=false; alert('Error de conexión.'); }
+    });
+  };
+  inp.click();
+}
 
 function serialToFecha(s){
   if(typeof s !== 'number') return String(s||'').trim();
