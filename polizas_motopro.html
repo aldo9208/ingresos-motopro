@@ -117,8 +117,8 @@
 
 <script>
 const $=id=>document.getElementById(id);
-const CTAS={ caja:'1110-001-0001', bbva:'1120-001-0001', iva:'2190-001-0001', ventas:'4100-001-0000' };
-const NOM={ '1110-001-0001':'Caja General', '1120-001-0001':'BBVA Bancomer', '2190-001-0001':'IVA 16% cobrado', '4100-001-0000':'Ventas al 16%' };
+const CTAS={ caja:'1110-001-0001', bbva:'1120-001-0001', iva:'2190-001-0001', ventas:'4100-001-0000', clientes:'1150-001-0001' };
+const NOM={ '1110-001-0001':'Caja General', '1120-001-0001':'BBVA Bancomer', '2190-001-0001':'IVA 16% cobrado', '4100-001-0000':'Ventas al 16%', '1150-001-0001':'Clientes Contado' };
 const TARJ=new Set(['04','28','05']), TRANSF=new Set(['03']), EFVO=new Set(['01']);
 const fmt=n=>'$'+(Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const r2=n=>Math.round((Number(n)||0)*100)/100;
@@ -149,7 +149,7 @@ function parseXML(txt){
   if(!iva) iva=r2(tot-(sub-desc));
   let uuid='';
   for(const n of imp){ if(n.localName==='TimbreFiscalDigital'){ uuid=n.getAttribute('UUID')||''; break; } }
-  return { folio:(g('Serie')||'')+(g('Folio')||''), fecha:(g('Fecha')||'').slice(0,10),
+  return { folio:(g('Serie')||'')+(g('Folio')||''), serie:g('Serie')||'', folioNum:g('Folio')||'', fecha:(g('Fecha')||'').slice(0,10),
            forma:g('FormaPago'), sub:r2(sub-desc), iva:r2(iva), total:r2(tot), uuid };
 }
 
@@ -197,36 +197,42 @@ function tablaPol(clase, titulo, tag, filas, totCargo, totAbono){
   const wrap=document.createElement('div'); wrap.className='pol';
   const cuadra=Math.abs(totCargo-totAbono)<0.01;
   let html='<div class="pol-head '+clase+'">'+titulo+'<span class="tag">'+tag+'</span></div>'+
-    '<table><thead><tr><th>Cuenta</th><th>Concepto</th><th class="r">Cargo</th><th class="r">Abono</th></tr></thead><tbody>';
+    '<table><thead><tr><th>Cuenta</th><th class="r">Cargo</th><th class="r">Abono</th><th>CF</th></tr></thead><tbody>';
   filas.forEach(f=>{
-    html+='<tr'+(f.grp?' class="grp"':'')+'><td>'+f.cta+' · '+NOM[f.cta]+'</td><td class="cta">'+(f.con||'')+'</td>'+
-      '<td class="r num">'+(f.cargo?fmt(f.cargo):'')+'</td><td class="r num">'+(f.abono?fmt(f.abono):'')+'</td></tr>';
+    html+='<tr'+(f.grp?' class="grp"':'')+'><td>'+f.cta+' · '+NOM[f.cta]+'</td>'+
+      '<td class="r num">'+(f.cargo?fmt(f.cargo):'')+'</td><td class="r num">'+(f.abono?fmt(f.abono):'')+'</td>'+
+      '<td>'+(f.cf?'<span title="'+f.cf+'">🧾</span>':'')+'</td></tr>';
   });
-  html+='</tbody><tfoot><tr><td colspan="2" class="'+(cuadra?'ok-cuadre':'bad-cuadre')+'">'+(cuadra?'✓ Cuadra':'⚠ No cuadra')+
-    '</td><td class="r num">'+fmt(totCargo)+'</td><td class="r num">'+fmt(totAbono)+'</td></tr></tfoot></table>';
+  html+='</tbody><tfoot><tr><td class="'+(cuadra?'ok-cuadre':'bad-cuadre')+'">'+(cuadra?'✓ Cuadra':'⚠ No cuadra')+
+    '</td><td class="r num">'+fmt(totCargo)+'</td><td class="r num">'+fmt(totAbono)+'</td><td></td></tr></tfoot></table>';
   wrap.innerHTML=html;
   return wrap;
 }
 
+function concepto(f, efectivo){
+  return (efectivo?'VENTAS EN EFECTIVO DEL DIA ':'VENTAS DEL DIA ')+f.fecha+' MOTOPRO SERIE '+f.serie+' FACT/'+f.folioNum;
+}
+
+function asientoFactura(f, ctaCobro, efectivo, filas, primero){
+  const con=concepto(f, efectivo);
+  filas.push({cta:ctaCobro,      con:con, cargo:f.total, grp:true});
+  filas.push({cta:CTAS.iva,      con:con, abono:f.iva});
+  filas.push({cta:CTAS.ventas,   con:con, abono:f.sub});
+  filas.push({cta:CTAS.clientes, con:con, cargo:f.total, cf:f.uuid});
+  filas.push({cta:CTAS.clientes, con:con, abono:f.total, cf:f.uuid});
+}
+
 function polizaTarjetas(d){
   const filas=[]; let tc=0,ta=0;
-  d.tarjetas.forEach(f=>{
-    filas.push({cta:CTAS.bbva, con:'Fac '+f.folio, cargo:f.total, grp:true});
-    filas.push({cta:CTAS.ventas, con:'Base', abono:f.sub});
-    filas.push({cta:CTAS.iva, con:'IVA', abono:f.iva});
-    tc+=f.total; ta+=f.sub+f.iva;
-  });
+  d.tarjetas.forEach(f=>{ asientoFactura(f, CTAS.bbva, false, filas);
+    tc+=f.total+f.total; ta+=f.iva+f.sub+f.total; });
   return tablaPol('tar','Póliza de tarjetas — '+d.fecha,'Ig · '+d.tarjetas.length+' facturas',filas,r2(tc),r2(ta));
 }
 
 function polizaEfectivo(d){
   const filas=[]; let tc=0,ta=0;
-  d.efectivo.forEach(f=>{
-    filas.push({cta:CTAS.caja, con:'Global '+f.folio, cargo:f.total, grp:true});
-    filas.push({cta:CTAS.ventas, con:'Base', abono:f.sub});
-    filas.push({cta:CTAS.iva, con:'IVA', abono:f.iva});
-    tc+=f.total; ta+=f.sub+f.iva;
-  });
+  d.efectivo.forEach(f=>{ asientoFactura(f, CTAS.caja, true, filas);
+    tc+=f.total+f.total; ta+=f.iva+f.sub+f.total; });
   return tablaPol('efe','Póliza de efectivo (global) — '+d.fecha,'Ig',filas,r2(tc),r2(ta));
 }
 
@@ -242,36 +248,30 @@ function polizaDeposito(d){
 
 // ---- Excel ----
 $('btnExcel').addEventListener('click', ()=>{
-  const rows=[['TIPO PÓLIZA','FECHA','CONCEPTO','CUENTA','NOMBRE','CARGO','ABONO','REFERENCIA','UUID']];
+  const rows=[['TIPO','FECHA','CONCEPTO','CUENTA','NOMBRE','CARGO','ABONO','CF','UUID']];
+  const bloque=(f, ctaCobro, efectivo)=>{
+    const con=concepto(f, efectivo), fe=f.fecha;
+    rows.push(['Ig',fe,con,ctaCobro,    NOM[ctaCobro],   f.total,'','','']);
+    rows.push(['Ig',fe,con,CTAS.iva,     NOM[CTAS.iva],   '',f.iva,'','']);
+    rows.push(['Ig',fe,con,CTAS.ventas,  NOM[CTAS.ventas],'',f.sub,'','']);
+    rows.push(['Ig',fe,con,CTAS.clientes,NOM[CTAS.clientes],f.total,'','CF',f.uuid]);
+    rows.push(['Ig',fe,con,CTAS.clientes,NOM[CTAS.clientes],'',f.total,'CF',f.uuid]);
+    rows.push(['FIN_PARTIDAS','','','','','','','','']);
+  };
   dias.forEach(d=>{
-    if(d.tarjetas.length){
-      d.tarjetas.forEach(f=>{
-        rows.push(['Ig',d.fecha,'Cobro con tarjeta',CTAS.bbva,NOM[CTAS.bbva],f.total,'',f.folio,f.uuid]);
-        rows.push(['Ig',d.fecha,'Ventas',CTAS.ventas,NOM[CTAS.ventas],'',f.sub,f.folio,f.uuid]);
-        rows.push(['Ig',d.fecha,'IVA cobrado',CTAS.iva,NOM[CTAS.iva],'',f.iva,f.folio,f.uuid]);
-      });
-      rows.push(['FIN_PARTIDAS','','','','','','','','']);
-    }
+    d.tarjetas.forEach(f=>bloque(f, CTAS.bbva, false));
+    d.efectivo.forEach(f=>bloque(f, CTAS.caja, true));
     if(d.efectivo.length){
-      d.efectivo.forEach(f=>{
-        rows.push(['Ig',d.fecha,'Venta efectivo (global)',CTAS.caja,NOM[CTAS.caja],f.total,'',f.folio,f.uuid]);
-        rows.push(['Ig',d.fecha,'Ventas',CTAS.ventas,NOM[CTAS.ventas],'',f.sub,f.folio,f.uuid]);
-        rows.push(['Ig',d.fecha,'IVA cobrado',CTAS.iva,NOM[CTAS.iva],'',f.iva,f.folio,f.uuid]);
-      });
-      rows.push(['FIN_PARTIDAS','','','','','','','','']);
       const monto=r2(d.efectivo.reduce((s,f)=>s+f.total,0));
       const fdep=$('fechaDep').value || masUnDia(d.fecha);
-      rows.push(['Dr',fdep,'Depósito ventas '+d.fecha,CTAS.bbva,NOM[CTAS.bbva],monto,'','','']);
-      rows.push(['Dr',fdep,'Traspaso a banco',CTAS.caja,NOM[CTAS.caja],'',monto,'','']);
+      rows.push(['Dr',fdep,'DEPOSITO DE VENTAS DEL DIA '+d.fecha,CTAS.bbva,NOM[CTAS.bbva],monto,'','','']);
+      rows.push(['Dr',fdep,'DEPOSITO DE VENTAS DEL DIA '+d.fecha,CTAS.caja,NOM[CTAS.caja],'',monto,'','']);
       rows.push(['FIN_PARTIDAS','','','','','','','','']);
     }
-    const otros=d.otros;
-    if(otros.length){
-      otros.forEach(f=>rows.push(['REVISAR',d.fecha,'Forma pago '+f.forma,'','',f.total,'',f.folio,f.uuid]));
-    }
+    d.otros.forEach(f=>rows.push(['REVISAR',d.fecha,'Forma pago '+f.forma,'','',f.total,'','',f.uuid]));
   });
   const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:12},{wch:11},{wch:24},{wch:15},{wch:18},{wch:11},{wch:11},{wch:10},{wch:38}];
+  ws['!cols']=[{wch:13},{wch:11},{wch:46},{wch:15},{wch:18},{wch:11},{wch:11},{wch:5},{wch:38}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Pólizas');
   XLSX.writeFile(wb,'polizas_motopro.xlsx');
