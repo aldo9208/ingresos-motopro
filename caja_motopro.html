@@ -115,6 +115,10 @@
   .dep-dep span,.dep-exc span{display:block;font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.3px;margin-bottom:2px}
   .dep-dep span{color:var(--green)} .dep-dep b{color:var(--green);font-size:17px}
   .dep-exc span{color:var(--amber)} .dep-exc b{color:var(--amber);font-size:17px}
+  .ficha{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line)}
+  .ficha-ok{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--green);font-weight:600}
+  .ficha-ok span{flex:1}
+  .ficha-ok .x{border:none;background:var(--red-soft);color:var(--red);width:24px;height:24px;border-radius:6px;cursor:pointer;font-weight:700}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
 </style>
@@ -242,7 +246,7 @@ function parseSait(buf){
 
   cortes=Object.values(grupos).map(g=>({
     lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
-    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[], pct_desc:20, efvo_facturado:0,
+    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[], pct_desc:20, efvo_facturado:0, ficha:null,
     totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
     total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
   }));
@@ -302,6 +306,26 @@ function llenarDet(det,c){
   else det.innerHTML+='<div class="empty">Sin ventas con tarjeta en SAIT.</div>';
   det.appendChild(cotejoVouchers(c,det));
   det.appendChild(depositoEfectivo(c));
+  det.appendChild(fichaDeposito(c));
+}
+
+function fichaDeposito(c){
+  const box=document.createElement('div'); box.className='ficha';
+  box.innerHTML='<div class="dep-head">Ficha de depósito</div>';
+  if(c.ficha){
+    box.innerHTML+='<div class="ficha-ok"><img class="thumb" src="'+c.ficha+'"><span>Ficha lista</span><button class="x">✕</button></div>';
+    box.querySelector('.x').onclick=ev=>{ ev.stopPropagation(); c.ficha=null; render(); };
+  } else {
+    box.innerHTML+='<button class="vbtn ficha-add">🧾 Subir foto de la ficha</button>';
+    box.querySelector('.ficha-add').onclick=ev=>{ ev.stopPropagation(); pickFicha(c); };
+  }
+  return box;
+}
+
+function pickFicha(c){
+  const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+  inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, d=>{ c.ficha=d; render(); }); };
+  inp.click();
 }
 
 function calcDeposito(c){
@@ -483,7 +507,7 @@ $('btnGuardar').addEventListener('click', async ()=>{
       action:'guardar_corte',
       corte:{ id_corte:c.lote, fecha:c.fechaISO, sucursal:'Moto Pro',
               efectivo:c.totEF, debito:c.totTD, credito:c.totTC, transferencia:c.totTR, total:c.total, capturado_por:nombre,
-              pct_desc:c.pct_desc, efvo_facturado:c.efvo_facturado, deposito_efectivo:c.deposito_efectivo, excedente_efvo:c.excedente_efvo },
+              pct_desc:c.pct_desc, efvo_facturado:c.efvo_facturado, deposito_efectivo:c.deposito_efectivo, excedente_efvo:c.excedente_efvo, ficha_b64:c.ficha||'' },
       ventas:c.ventas.map(v=>({ folio:v.folio, hora:v.hora, tipo:v.cat, cliente:v.cliente, monto:v.monto, voucherB64:v.voucher||'' }))
         .concat(c.extras.map((e,i)=>({ folio:'EXTRA'+(i+1), hora:'', tipo:'EXTRA', cliente:'Voucher sin venta de tarjeta (revisar SAIT)', monto:0, voucherB64:e.voucher })))
     };

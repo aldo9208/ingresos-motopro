@@ -505,7 +505,13 @@ function llenarDetalle(det,c,k){
       '</div>';
   });
   det.innerHTML=html;
-  det.querySelectorAll('.vsmall').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); verVoucher(b.dataset.vid,b); });
+  if(c.ficha_deposito && !String(c.ficha_deposito).startsWith('ERROR')){
+    const fb=document.createElement('button'); fb.className='vsmall'; fb.style.marginTop='8px';
+    fb.textContent='🧾 Ver ficha de depósito';
+    fb.onclick=ev=>{ ev.stopPropagation(); verVoucher(c.ficha_deposito, fb); };
+    det.appendChild(fb);
+  }
+  det.querySelectorAll('.vsmall[data-vid]').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); verVoucher(b.dataset.vid,b); });
 }
 
 async function verVoucher(id,btn){
