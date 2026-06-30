@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ingresos Moto Pro · Contabilidad</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+  :root{
+    --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
+    --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--green-soft:#E5F1EA;
+    --red:#BE3A34;--red-soft:#F8E7E5;--blue:#2C5C8A;--blue-soft:#E7EFF6;--gray-soft:#F0EEE8;
+    --purple:#6A4BA8;--purple-soft:#EEE9F6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45;-webkit-font-smoothing:antialiased;padding-bottom:64px}
+  .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
+  .wrap{max-width:820px;margin:0 auto;padding:0 16px}
+  header{background:var(--ink);color:#fff;padding:18px 0 16px}
+  header .wrap{display:flex;align-items:center;gap:12px}
+  .logo{width:38px;height:38px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:0 0 auto;font-weight:800;font-size:18px;color:#19170F;letter-spacing:-1px}
+  header h1{font-size:18px;font-weight:700;letter-spacing:-.2px;line-height:1.1}
+  header .sub{font-size:12px;color:#B8B2A4;font-weight:500;margin-top:1px}
+  .links{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
+  .links a{text-decoration:none;background:#2A271E;color:#E8E3D6;font-size:12.5px;font-weight:700;padding:8px 12px;border-radius:9px;white-space:nowrap}
+  .links a.on{background:var(--amber);color:#19170F}
+
+  section{margin-top:16px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--amber);margin-bottom:12px}
+  .config{background:var(--amber-soft);border:1px solid #F0CDA1;color:#9A5512;border-radius:10px;padding:10px 13px;font-size:13px;font-weight:600}
+  .hidden{display:none!important}
+
+  .drop{display:block;border:2px dashed var(--line);border-radius:12px;padding:18px 16px;text-align:center;cursor:pointer;transition:.15s;background:#FCFBF8}
+  .drop:hover{border-color:var(--amber);background:var(--amber-soft)}
+  .drop .ic{font-size:22px}
+  .drop b{display:block;margin-top:6px;font-size:15px}
+  .drop small{color:var(--ink-soft);font-size:12.5px}
+  input[type=file]{position:absolute;width:1px;height:1px;opacity:0}
+
+  .btn{border:1px solid var(--line);background:#fff;color:var(--ink);font-weight:700;font-size:13px;padding:8px 13px;border-radius:9px;cursor:pointer;font-family:inherit}
+  .btn:hover{background:var(--gray-soft)}
+  .btn.amber{background:var(--amber);color:#19170F;border-color:transparent}
+  .btn.green{background:var(--green);color:#fff;border-color:transparent}
+  .btn.sm{padding:6px 10px;font-size:12px}
+
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px}
+  .grid4 .b{border:1px solid var(--line);border-radius:10px;padding:10px;background:#FCFBF8}
+  .grid4 .b .l{font-size:10.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.3px}
+  .grid4 .b .v{font-size:17px;font-weight:700;margin-top:3px;letter-spacing:-.3px}
+  .grid4 .b.green{background:var(--green-soft);border-color:transparent}.grid4 .b.green .v{color:var(--green)}
+  .grid4 .b.amber{background:var(--amber-soft);border-color:transparent}.grid4 .b.amber .v{color:var(--amber)}
+  @media(max-width:560px){ .grid4{grid-template-columns:repeat(2,1fr)} }
+
+  .titrow{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .titrow h2{font-size:15px;font-weight:700}
+  .titrow .sp{margin-left:auto}
+
+  details.cat{border:1px solid var(--line);border-radius:12px;background:#fff;margin-top:8px}
+  details.cat>summary{cursor:pointer;padding:13px 14px;font-weight:700;font-size:13.5px;list-style:none;display:flex;align-items:center;gap:8px}
+  details.cat>summary::-webkit-details-marker{display:none}
+  details.cat>summary .chev{margin-left:auto;color:var(--ink-soft);transition:.2s}
+  details.cat[open]>summary .chev{transform:rotate(90deg)}
+  .catbody{padding:4px 14px 14px}
+  .catrow{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+  .catrow .nm{flex:1;font-size:13px;font-weight:600}
+  .catrow .nm small{display:block;font-weight:500;color:var(--ink-soft);font-size:11px}
+  .catrow input{width:158px;border:1px solid var(--line);border-radius:8px;padding:7px 9px;font-size:13px;font-family:ui-monospace,monospace;background:#FCFBF8}
+  .catrow input:focus{outline:none;border-color:var(--amber);background:#fff}
+
+  .day{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden;background:#fff}
+  .day-row{display:flex;align-items:center;gap:12px;padding:12px 14px;cursor:pointer}
+  .day-row:hover{background:#FCFBF8}
+  .day-date{font-weight:700;font-size:14.5px;min-width:84px}
+  .pills{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+  .pill{font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px}
+  .pill.ok{background:var(--green-soft);color:var(--green)}
+  .pill.todo{background:var(--red-soft);color:var(--red)}
+  .pill.ya{background:var(--gray-soft);color:var(--ink-soft)}
+  .day-chev{color:var(--ink-soft);transition:.2s}.day.open .day-chev{transform:rotate(90deg)}
+  .day-body{display:none;border-top:1px solid var(--line);padding:6px 0}
+  .day.open .day-body{display:block}
+
+  .mov{display:flex;align-items:center;gap:11px;padding:10px 14px;border-bottom:1px solid #F1EEE6}
+  .mov:last-child{border-bottom:none}
+  .mov .ic{flex:0 0 auto;width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-size:14px;font-weight:800}
+  .ic.eg{background:var(--red-soft);color:var(--red)}
+  .ic.ig{background:var(--green-soft);color:var(--green)}
+  .ic.ya{background:var(--gray-soft);color:var(--ink-soft)}
+  .ic.todo{background:var(--amber-soft);color:var(--amber)}
+  .mov .mid{flex:1;min-width:0}
+  .mov .mid .l1{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mov .mid .l2{font-size:11.5px;color:var(--ink-soft);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mov .mid .l2 .tag{display:inline-block;background:var(--purple-soft);color:var(--purple);font-weight:700;padding:1px 7px;border-radius:10px;font-size:10.5px;margin-right:5px}
+  .mov .mid .l2 .tag.rancho{background:var(--green-soft);color:var(--green)}
+  .mov .mid .l2 .tag.moto{background:var(--blue-soft);color:var(--blue)}
+  .mov .amt{flex:0 0 auto;text-align:right;font-weight:700;font-size:13.5px}
+  .mov .amt.eg{color:var(--red)}.mov .amt.ig{color:var(--green)}
+  .mov .amt small{display:block;font-size:10.5px;color:var(--ink-soft);font-weight:600}
+  .mov .act{flex:0 0 auto}
+
+  .loading{text-align:center;color:var(--ink-soft);font-size:13.5px;padding:18px}
+
+  .modal{position:fixed;inset:0;background:rgba(15,13,8,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:16px}
+  .modal.show{display:flex}
+  .sheet{background:#fff;border-radius:16px;max-width:440px;width:100%;padding:20px;max-height:90vh;overflow:auto}
+  .sheet h3{font-size:16px;font-weight:700;margin-bottom:3px}
+  .sheet .desc{font-size:12.5px;color:var(--ink-soft);margin-bottom:14px}
+  .fld{margin-bottom:13px}
+  .fld label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
+  .fld input,.fld select{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#FCFBF8}
+  .fld input:focus,.fld select:focus{outline:none;border-color:var(--amber);background:#fff}
+  .seg{display:flex;gap:7px}
+  .seg button{flex:1;border:1px solid var(--line);background:#fff;padding:9px;border-radius:9px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit}
+  .seg button.act{background:var(--ink);color:#fff;border-color:transparent}
+  .chk{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer}
+  .chk input{width:auto}
+  .sheet .row{display:flex;gap:9px;margin-top:6px}
+  .sheet .row .btn{flex:1;justify-content:center;text-align:center}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo">M</div>
+    <div>
+      <h1>Contabilidad · Banco BBVA</h1>
+      <div class="sub">Todo el movimiento del banco → pólizas para COI</div>
+    </div>
+    <nav class="links">
+      <a href="caja_motopro.html">🧾 Caja</a>
+      <a href="admin_motopro.html">📊 Admin</a>
+      <a href="polizas_motopro.html">📑 Pólizas</a>
+      <a href="contabilidad_motopro.html" class="on">🏦 Banco</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+  <div id="avisoConfig" class="config hidden" style="margin-top:14px">⚠️ Falta configurar la liga del backend (API_URL).</div>
+
+  <!-- 1 · Subir estado de cuenta -->
+  <section>
+    <div class="card">
+      <div class="eyebrow">1 · Subir estado de cuenta de BBVA</div>
+      <label class="drop" tabindex="0">
+        <input type="file" id="fileBBVA" accept=".pdf,.xlsx,.xls">
+        <div class="ic">🏦</div>
+        <b>Arrastra el PDF (o Excel) del estado de cuenta</b>
+        <small>Lee todos los movimientos del mes y los contabiliza</small>
+      </label>
+      <div id="periodo" class="hidden" style="margin-top:10px;font-size:13px;font-weight:600;color:var(--ink-soft)"></div>
+    </div>
+  </section>
+
+  <!-- Resumen -->
+  <section id="secResumen" class="hidden">
+    <div class="card">
+      <div class="eyebrow">Resumen del mes</div>
+      <div class="grid4">
+        <div class="b"><div class="l">Movimientos</div><div class="v num" id="rTot">0</div></div>
+        <div class="b green"><div class="l">Contabilizados</div><div class="v num" id="rAuto">0</div></div>
+        <div class="b amber"><div class="l">Por clasificar</div><div class="v num" id="rTodo">0</div></div>
+        <div class="b"><div class="l">Ya en ingresos</div><div class="v num" id="rYa">0</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 2 · Catálogo de cuentas -->
+  <section id="secCat" class="hidden">
+    <div class="card">
+      <div class="eyebrow">2 · Catálogo de cuentas COI</div>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-bottom:4px">Las que ya conozco vienen llenas. Completa las que falten (pregúntale a Miriam) y todo lo de ese tipo se contabiliza solo.</p>
+      <details class="cat" id="catBox">
+        <summary>Ver y editar cuentas <span class="chev">›</span></summary>
+        <div class="catbody" id="catRows"></div>
+        <div style="margin-top:12px"><button class="btn amber sm" id="btnGuardarCat">Guardar cuentas</button></div>
+      </details>
+    </div>
+  </section>
+
+  <!-- 3 · Tablero por día -->
+  <section id="secTablero" class="hidden">
+    <div class="card">
+      <div class="titrow">
+        <h2>3 · Movimientos por día</h2>
+        <span class="sp"></span>
+        <button class="btn sm" id="btnExpAll">Exportar todo el mes</button>
+      </div>
+      <div id="dias"></div>
+    </div>
+  </section>
+</div>
+
+<!-- Modal de clasificación -->
+<div class="modal" id="modal">
+  <div class="sheet">
+    <h3 id="mTit">Clasificar movimiento</h3>
+    <div class="desc" id="mDesc"></div>
+    <div class="fld">
+      <label>Empresa</label>
+      <div class="seg" id="segEmp">
+        <button data-e="Rancho">🍋 Rancho</button>
+        <button data-e="Moto Pro">🏍️ Moto Pro</button>
+      </div>
+    </div>
+    <div class="fld">
+      <label>Cuenta COI</label>
+      <input id="mCuenta" list="cuentasList" placeholder="ej. 6000-021-0001" autocomplete="off">
+      <datalist id="cuentasList"></datalist>
+    </div>
+    <div class="fld">
+      <label>Etiqueta (cómo se llama este gasto/ingreso)</label>
+      <input id="mEtq" placeholder="ej. Combustible rancho">
+    </div>
+    <label class="chk" style="margin-bottom:14px">
+      <input type="checkbox" id="mRecordar" checked>
+      <span id="mRecordarTxt">Recordar para este proveedor</span>
+    </label>
+    <div class="row">
+      <button class="btn" id="mCancel">Cancelar</button>
+      <button class="btn amber" id="mGuardar">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
+const $ = id => document.getElementById(id);
+const fmt = n => '$'+(Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const norm = s => (s||'').toString().toUpperCase().replace(/\s+/g,' ').trim();
+if(!API_URL) $('avisoConfig').classList.remove('hidden');
+pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// ===== Catálogo de cuentas (defaults conocidos; '' = por configurar) =====
+const CAT_DEF = [
+  ['banco','Banco BBVA','contracuenta de todo','1120-001-0001'],
+  ['gastos_aldo','Gastos P/Aldo','retiros en cajero','6000-030-0001'],
+  ['combustible','Combustible (diésel/gasolina)','rancho','6000-021-0001'],
+  ['iva_acred','IVA acreditable','IVA de comisiones y gastos','1191-001-0002'],
+  ['comision','Comisión bancaria','apli tasa, serv banca','' ],
+  ['nomina','Nómina','pago de nómina','' ],
+  ['viaticos','Viáticos','pago viáticos','' ],
+  ['telefono','Teléfono','Telmex','' ],
+  ['luz','Luz','CFE','' ],
+  ['imss','IMSS / Infonavit','sipare','' ],
+  ['tarjeta_credito','Tarjeta de crédito','pago de TDC','' ],
+  ['riego','Riego','rancho','' ],
+  ['maquinaria','Maquinaria / tractor','rancho','' ],
+  ['agroquimicos','Agroquímicos','rancho','' ],
+  ['renta','Renta','renta Moto Pro','' ],
+  ['proveedor','Proveedores','pago a proveedor','' ],
+  ['otros_gasto','Otros gastos','limpieza, papelería…','' ],
+  ['ing_limon','Ventas limón','ingreso rancho','' ],
+  ['ing_citrus','Exportación cítrico','ingreso rancho','' ],
+  ['ing_motopro','Ingreso Moto Pro','piezas, otros','' ],
+  ['otros_ing','Otros ingresos','sin clasificar','' ]
+];
+let CUENTAS = {}; CAT_DEF.forEach(c=>CUENTAS[c[0]]=c[3]);
+
+// Reglas base por palabra clave (sugerencia de empresa + categoría)
+const REGLAS_BASE = [
+  {kw:['GASOLINA','BARDA BLANCA'], emp:'Rancho', cat:'combustible', etq:'Combustible rancho'},
+  {kw:['RIEGO','HECTOR VAZQUEZ'], emp:'Rancho', cat:'riego', etq:'Riego rancho'},
+  {kw:['TRACTOR','RETROEXCAVADORA','COMPOSTURA'], emp:'Rancho', cat:'maquinaria', etq:'Maquinaria rancho'},
+  {kw:['AGROQUIMICOS'], emp:'Rancho', cat:'agroquimicos', etq:'Agroquímicos rancho'},
+  {kw:['BOMBA'], emp:'Rancho', cat:'maquinaria', etq:'Bomba rancho'},
+  {kw:['RENTA MOTO PRO'], emp:'Moto Pro', cat:'renta', etq:'Renta Moto Pro'},
+  {kw:['LIMONES MONICA'], emp:'Rancho', cat:'ing_limon', etq:'Venta limón'},
+  {kw:['WONDERFUL CITRUS'], emp:'Rancho', cat:'ing_citrus', etq:'Exportación cítrico'},
+  {kw:['PIEZAS'], emp:'Moto Pro', cat:'ing_motopro', etq:'Ingreso Moto Pro'},
+  {kw:['LIMPIEZA'], emp:'', cat:'otros_gasto', etq:'Limpieza'},
+  {kw:['PAPELERIA'], emp:'', cat:'otros_gasto', etq:'Papelería'},
+  {kw:['NOMINA'], emp:'', cat:'nomina', etq:'Nómina'},
+  {kw:['AGROQUIMIC'], emp:'Rancho', cat:'agroquimicos', etq:'Agroquímicos'},
+  {kw:['REFACCION'], emp:'Moto Pro', cat:'proveedor', etq:'Refacciones'},
+  {kw:['PAGO PROVEEDOR'], emp:'', cat:'proveedor', etq:'Pago a proveedor'}
+];
+
+let REGLAS = {};   // aprendidas (backend): clave -> {empresa,cuenta_cargo,cuenta_abono,tipo_poliza,etiqueta}
+let MOVS = [];     // movimientos del estado de cuenta
+let ANIO = 2026, MESNUM = '05';
+const MESES = {ENE:'01',FEB:'02',MAR:'03',ABR:'04',MAY:'05',JUN:'06',JUL:'07',AGO:'08',SEP:'09',OCT:'10',NOV:'11',DIC:'12'};
+
+// ===== Arranque =====
+(async function init(){
+  pintarCatalogo();
+  try{
+    const r = await (await fetch(API_URL+'?action=obtener_reglas')).json();
+    if(r.ok){ r.reglas.forEach(reg=>{ REGLAS[norm(reg.clave)]=reg; });
+      // Cargar cuentas guardadas (claves CAT:xxx)
+      Object.keys(REGLAS).forEach(k=>{ if(k.indexOf('CAT:')===0){ CUENTAS[k.slice(4).toLowerCase()] = REGLAS[k].cuenta_cargo || CUENTAS[k.slice(4).toLowerCase()]; } });
+      pintarCatalogo();
+    }
+  }catch(e){ console.warn('No pude cargar reglas', e); }
+})();
+
+// ===== Catálogo UI =====
+function pintarCatalogo(){
+  $('catRows').innerHTML = CAT_DEF.map(c=>{
+    const v = CUENTAS[c[0]]||'';
+    return '<div class="catrow"><div class="nm">'+c[1]+'<small>'+c[2]+'</small></div>'+
+      '<input data-cat="'+c[0]+'" value="'+v+'" placeholder="por definir"></div>';
+  }).join('');
+  // datalist de cuentas conocidas
+  const set = new Set(); CAT_DEF.forEach(c=>{ if(CUENTAS[c[0]]) set.add(CUENTAS[c[0]]); });
+  Object.values(REGLAS).forEach(r=>{ if(r.cuenta_cargo) set.add(r.cuenta_cargo); if(r.cuenta_abono) set.add(r.cuenta_abono); });
+  $('cuentasList').innerHTML = [...set].map(c=>'<option value="'+c+'">').join('');
+}
+$('btnGuardarCat').addEventListener('click', async ()=>{
+  document.querySelectorAll('#catRows input').forEach(i=>{ CUENTAS[i.dataset.cat]=i.value.trim(); });
+  // Guardar cada categoría como regla CAT:xxx
+  for(const c of CAT_DEF){
+    const val = CUENTAS[c[0]]||'';
+    if(val){ await guardarReglaBackend({clave:'CAT:'+c[0].toUpperCase(), empresa:'', cuenta_cargo:val, cuenta_abono:val, tipo_poliza:'', etiqueta:c[1]}); }
+  }
+  pintarCatalogo();
+  if(MOVS.length){ MOVS.forEach(clasificar); render(); }
+  $('btnGuardarCat').textContent='Guardado ✓';
+  setTimeout(()=>$('btnGuardarCat').textContent='Guardar cuentas',1500);
+});
+
+// ===== Leer archivo =====
+$('fileBBVA').addEventListener('change', e=>{
+  const f = e.target.files[0]; if(!f) return;
+  const r = new FileReader();
+  r.onload = async ev=>{
+    try{
+      if(/\.pdf$/i.test(f.name)){ await leerPDF(ev.target.result); }
+      else { leerExcel(ev.target.result); }
+      MOVS.forEach(clasificar);
+      render();
+      ['secResumen','secCat','secTablero'].forEach(s=>$(s).classList.remove('hidden'));
+    }catch(err){ alert('No pude leer el estado de cuenta. Revisa que sea el PDF o Excel de BBVA.'); console.error(err); }
+  };
+  if(/\.pdf$/i.test(f.name)) r.readAsArrayBuffer(f); else r.readAsArrayBuffer(f);
+});
+
+// ===== Parser PDF (todos los movimientos, cargo/abono por columna) =====
+const RE_FECHA = /^\d{2}\/[A-Z]{3}$/i;
+const RE_NUM = /^-?[\d,]+\.\d{2}$/;
+
+async function leerPDF(buf){
+  const pdf = await pdfjsLib.getDocument({data:buf}).promise;
+  let cols = null;
+  const lineas = [];
+  for(let p=1;p<=pdf.numPages;p++){
+    const page = await pdf.getPage(p);
+    const tc = await page.getTextContent();
+    let items = tc.items.filter(i=>i.str && i.str.trim())
+      .map(i=>({x:i.transform[4], r:i.transform[4]+(i.width||0), y:i.transform[5], s:i.str.trim()}));
+    items.sort((a,b)=> b.y-a.y || a.x-b.x);
+    let cur=[], yRef=null; const pls=[];
+    items.forEach(it=>{
+      if(yRef===null || Math.abs(it.y-yRef)<=3){ cur.push(it); if(yRef===null) yRef=it.y; }
+      else { pls.push(cur); cur=[it]; yRef=it.y; }
+    });
+    if(cur.length) pls.push(cur);
+    pls.forEach(ln=>{
+      ln.sort((a,b)=>a.x-b.x);
+      const txt = ln.map(o=>o.s).join(' ');
+      const up = txt.toUpperCase();
+      if(!cols && up.includes('CARGOS') && up.includes('ABONOS')){
+        const c = ln.find(o=>/CARGOS/i.test(o.s));
+        const a = ln.find(o=>/ABONOS/i.test(o.s));
+        const o = ln.find(o=>/OPERACI/i.test(o.s));
+        if(c && a) cols = {c:c.r, a:a.r, o:o?o.r:a.r+70};
+      }
+      const mP = up.match(/DEL\s+(\d{2})\/(\d{2})\/(\d{4})/);
+      if(mP){ MESNUM=mP[2]; ANIO=parseInt(mP[3],10); }
+      lineas.push({txt, items:ln});
+    });
+  }
+  if(!cols) cols = {c:520, a:600, o:660};
+  $('periodo').classList.remove('hidden');
+  $('periodo').textContent = '📅 Periodo '+MESNUM+'/'+ANIO+' · cuenta 0178926441';
+  MOVS = armarMovs(lineas, cols);
+}
+
+function armarMovs(lineas, cols){
+  const out = []; let cur=null; let refs=[];
+  function cerrar(){
+    if(cur){
+      cur.ref = refs.join(' · ');
+      cur.beneficiario = detBenef(refs);
+      cur.concepto = detConcepto(refs, cur.desc);
+      out.push(cur);
+    }
+    cur=null; refs=[];
+  }
+  lineas.forEach(L=>{
+    const it = L.items;
+    if(it.length>=2 && RE_FECHA.test(it[0].s) && RE_FECHA.test(it[1].s)){
+      cerrar();
+      const desc=[]; const montos=[];
+      for(let k=2;k<it.length;k++){
+        if(RE_NUM.test(it[k].s)) montos.push(it[k]);
+        else if(!montos.length) desc.push(it[k].s);
+      }
+      cur = {fecha:it[0].s, desc:desc.join(' ').trim(), cargo:0, abono:0};
+      montos.forEach(m=>{
+        const val = parseFloat(m.s.replace(/,/g,''));
+        const dc=Math.abs(m.r-cols.c), da=Math.abs(m.r-cols.a), dO=Math.abs(m.r-cols.o);
+        const mn=Math.min(dc,da,dO);
+        if(mn===dc && dc<da-1) cur.cargo=val;
+        else if(mn===da) cur.abono=val;
+        // si cae en saldo (o) se ignora
+      });
+      // fecha ISO
+      const mm=cur.fecha.split('/'); const dd=mm[0]; const mes=MESES[norm(mm[1])]||MESNUM;
+      cur.fechaISO = ANIO+'-'+mes+'-'+dd;
+    } else if(cur){
+      refs.push(L.txt);
+    }
+  });
+  cerrar();
+  // descartar líneas basura (sin cargo ni abono y desc vacía)
+  return out.filter(m=>m.desc && (m.cargo>0 || m.abono>0));
+}
+
+function detBenef(refs){
+  for(let i=refs.length-1;i>=0;i--){
+    const t=refs[i].trim();
+    if(/^[A-ZÁÉÍÓÚÑ&][A-ZÁÉÍÓÚÑ&\.\s]{6,}$/.test(t) && !/BNET|TERMINALES|PUNTO/.test(t)) return t;
+  }
+  return '';
+}
+function detConcepto(refs, desc){
+  if(!refs.length) return '';
+  let t = refs[0];
+  t = t.replace(/^[\d\s]+/,'').replace(/^BNET\s+\d+\s*/i,'').replace(/^\d{3}\s+\d+/,'');
+  t = t.replace(/^[0-9]+/,'').trim();
+  return t.slice(0,40);
+}
+
+// ===== Parser Excel (genérico por columnas) =====
+function leerExcel(buf){
+  const wb = XLSX.read(new Uint8Array(buf),{type:'array'});
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(ws,{header:1,raw:false});
+  let hi=-1, cD=-1,cC=-1,cA=-1,cR=-1;
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i].map(x=>norm(x));
+    if(r.some(x=>x.includes('CARGO')) && r.some(x=>x.includes('ABONO'))){
+      hi=i;
+      r.forEach((x,j)=>{ if(x.includes('DESCRIP'))cD=j; if(x.includes('CARGO'))cC=j; if(x.includes('ABONO'))cA=j; if(x.includes('REFER'))cR=j; });
+      break;
+    }
+  }
+  if(hi<0) throw new Error('sin header BBVA');
+  MOVS=[];
+  for(let i=hi+1;i<rows.length;i++){
+    const row=rows[i]; if(!row||!row.length) continue;
+    const desc=(row[cD]||'').toString().trim();
+    const ref=(cR>=0?(row[cR]||''):'').toString().trim();
+    const cargo=parseFloat((row[cC]||'0').toString().replace(/[$,]/g,''))||0;
+    const abono=parseFloat((row[cA]||'0').toString().replace(/[$,]/g,''))||0;
+    if(!desc || (!cargo && !abono)) continue;
+    MOVS.push({fecha:'', fechaISO:ANIO+'-'+MESNUM+'-01', desc, ref, beneficiario:detBenef([ref]), concepto:ref, cargo, abono});
+  }
+  $('periodo').classList.remove('hidden');
+  $('periodo').textContent='📅 '+MOVS.length+' movimientos leídos del Excel';
+}
+
+// ===== Clasificador =====
+function clasificar(m){
+  const desc = norm(m.desc);
+  const texto = norm(m.desc+' '+(m.concepto||'')+' '+(m.beneficiario||''));
+  const esEgreso = m.cargo>0;
+  // Ventas / depósitos: ya contabilizado por las pólizas de ingresos
+  if(/VENTAS (DEBITO|CREDITO|TDC)/.test(desc)){ m.clase=ya('Tarjeta'); return; }
+  if(/DEPOSITO EN EFECTIVO/.test(desc)){ m.clase=ya('Efectivo'); return; }
+  if(/RECIBO NO/.test(desc)){ m.clase=ya('Recibo'); return; }
+  // Comisiones (gasto + IVA)
+  if(/APLI TASA DE DES|SERV BANCA INTERNET|COM VTAS TDC/.test(desc)) return setEg(m,'comision','Comisión bancaria','Moto Pro');
+  if(/IVA TASA DE DESC|IVA COM/.test(desc)) return setEg(m,'iva_acred','IVA acreditable','Moto Pro');
+  // Retiros
+  if(/RETIRO CAJERO/.test(desc)) return setEg(m,'gastos_aldo','Retiro — Gastos Aldo','Moto Pro');
+  // Servicios fijos
+  if(/TELMEX/.test(desc)) return setEg(m,'telefono','Teléfono Telmex','');
+  if(/\bCFE\b/.test(desc)) return setEg(m,'luz','Luz CFE','');
+  if(/IMSS|AFORE|SIPARE|INFONAV/.test(texto)) return setEg(m,'imss','IMSS / Infonavit','');
+  if(/PAGO DE NOMINA/.test(desc)) return setEg(m,'nomina','Nómina','');
+  if(/PAGO VIATICOS/.test(desc)) return setEg(m,'viaticos','Viáticos','');
+  if(/PAGO TARJETA DE CREDITO/.test(desc)) return setEg(m,'tarjeta_credito','Pago tarjeta de crédito','');
+  // Regla aprendida por beneficiario exacto
+  let r = m.beneficiario ? REGLAS[norm(m.beneficiario)] : null;
+  if(!r){ // por concepto exacto
+    for(const k in REGLAS){ if(k.indexOf('CAT:')===0) continue; if(k && texto.includes(k)){ r=REGLAS[k]; break; } }
+  }
+  if(r){ aplicarRegla(m, r, esEgreso); return; }
+  // Regla base por palabra clave (sugerencia)
+  for(const rb of REGLAS_BASE){
+    if(rb.kw.some(k=>texto.includes(k))){
+      const cuenta = CUENTAS[rb.cat]||'';
+      m.clase = { dir: esEgreso?'eg':'ig', empresa:rb.emp, cat:rb.cat, cuenta, etiqueta:rb.etq,
+                  tipo_poliza: esEgreso?'Eg':'Ig', estado: cuenta?'auto':'todo', sugerido:true };
+      return;
+    }
+  }
+  // Por clasificar
+  m.clase = { dir: esEgreso?'eg':'ig', empresa:'', cat:'', cuenta:'', etiqueta:'',
+              tipo_poliza: esEgreso?'Eg':'Ig', estado:'todo', sugerido:false };
+}
+function ya(t){ return {dir:'ya', estado:'ya', etiqueta:t+' — ya en pólizas de ingresos'}; }
+function setEg(m, cat, etq, emp){
+  const cuenta = CUENTAS[cat]||'';
+  m.clase = { dir: m.cargo>0?'eg':'ig', empresa:emp, cat, cuenta, etiqueta:etq,
+              tipo_poliza: m.cargo>0?'Eg':'Ig', estado: cuenta?'auto':'todo', sugerido:false };
+}
+function aplicarRegla(m, r, esEgreso){
+  m.clase = { dir: esEgreso?'eg':'ig', empresa:r.empresa||'', cat:'', cuenta: esEgreso?(r.cuenta_cargo||r.cuenta_abono):(r.cuenta_abono||r.cuenta_cargo),
+              etiqueta:r.etiqueta||'', tipo_poliza:r.tipo_poliza||(esEgreso?'Eg':'Ig'), estado:'auto', sugerido:false };
+}
+
+// ===== Render =====
+function render(){
+  const auto = MOVS.filter(m=>m.clase.estado==='auto').length;
+  const todo = MOVS.filter(m=>m.clase.estado==='todo').length;
+  const ya   = MOVS.filter(m=>m.clase.estado==='ya').length;
+  $('rTot').textContent = MOVS.length;
+  $('rAuto').textContent = auto;
+  $('rTodo').textContent = todo;
+  $('rYa').textContent = ya;
+
+  // agrupar por día
+  const porDia = {};
+  MOVS.forEach((m,i)=>{ m._i=i; (porDia[m.fechaISO]=porDia[m.fechaISO]||[]).push(m); });
+  const dias = Object.keys(porDia).sort();
+  $('dias').innerHTML = dias.map(d=>{
+    const ms = porDia[d];
+    const a = ms.filter(m=>m.clase.estado==='auto').length;
+    const t = ms.filter(m=>m.clase.estado==='todo').length;
+    const y = ms.filter(m=>m.clase.estado==='ya').length;
+    const pills = [];
+    if(a) pills.push('<span class="pill ok">'+a+' contab.</span>');
+    if(t) pills.push('<span class="pill todo">'+t+' por clasificar</span>');
+    if(y) pills.push('<span class="pill ya">'+y+' ya</span>');
+    const rows = ms.map(m=>movHTML(m)).join('');
+    return '<div class="day" data-d="'+d+'">'+
+      '<div class="day-row" onclick="this.parentNode.classList.toggle(\'open\')">'+
+        '<div class="day-date">'+fechaCorta(d)+'</div>'+
+        '<div class="pills">'+pills.join('')+'</div>'+
+        '<button class="btn sm" onclick="event.stopPropagation();exportarDia(\''+d+'\')">Exportar día</button>'+
+        '<span class="day-chev">›</span>'+
+      '</div>'+
+      '<div class="day-body">'+rows+'</div>'+
+    '</div>';
+  }).join('');
+}
+function movHTML(m){
+  const c = m.clase;
+  let icCls='ya', icTxt='✓';
+  if(c.estado==='auto'){ icCls = c.dir==='ig'?'ig':'eg'; icTxt = c.dir==='ig'?'+':'−'; }
+  else if(c.estado==='todo'){ icCls='todo'; icTxt='?'; }
+  const monto = m.cargo>0 ? m.cargo : m.abono;
+  const amtCls = m.cargo>0?'eg':'ig';
+  let tag='';
+  if(c.empresa){ const cl=c.empresa==='Rancho'?'rancho':(c.empresa==='Moto Pro'?'moto':''); tag='<span class="tag '+cl+'">'+c.empresa+'</span>'; }
+  let l2;
+  if(c.estado==='ya') l2 = c.etiqueta;
+  else if(c.estado==='todo') l2 = tag+(c.sugerido?('Sugiero: '+c.etiqueta+' — falta cuenta'):'Sin clasificar — toca para asignar');
+  else l2 = tag+c.etiqueta+(c.cuenta?(' · '+c.cuenta):'');
+  const benef = m.beneficiario || m.concepto || '';
+  const l1 = (m.desc||'').replace(/TERMINALES PUNTO DE VENTA/,'').trim() + (benef?(' · '+benef):'');
+  const act = c.estado==='ya' ? '' :
+    '<div class="act"><button class="btn sm" onclick="abrirModal('+m._i+')">'+(c.estado==='todo'?'Clasificar':'Editar')+'</button></div>';
+  return '<div class="mov">'+
+    '<div class="ic '+icCls+'">'+icTxt+'</div>'+
+    '<div class="mid"><div class="l1">'+l1+'</div><div class="l2">'+l2+'</div></div>'+
+    '<div class="amt '+amtCls+'">'+fmt(monto)+'<small>'+(m.cargo>0?'cargo':'abono')+'</small></div>'+
+    act+
+  '</div>';
+}
+function fechaCorta(iso){
+  const [a,m,d]=iso.split('-'); const mn=['','ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+  return parseInt(d,10)+' '+mn[parseInt(m,10)];
+}
+
+// ===== Modal de clasificación =====
+let modalIdx=-1, modalEmp='';
+function abrirModal(i){
+  modalIdx=i; const m=MOVS[i]; const c=m.clase;
+  $('mTit').textContent = m.cargo>0?'Clasificar egreso':'Clasificar ingreso';
+  $('mDesc').textContent = (m.desc||'')+' · '+(m.beneficiario||m.concepto||'')+' · '+fmt(m.cargo>0?m.cargo:m.abono);
+  modalEmp = c.empresa||'';
+  document.querySelectorAll('#segEmp button').forEach(b=>b.classList.toggle('act', b.dataset.e===modalEmp));
+  $('mCuenta').value = c.cuenta||'';
+  $('mEtq').value = c.etiqueta||'';
+  const benef = m.beneficiario||'';
+  $('mRecordarTxt').textContent = benef ? ('Recordar para «'+benef+'»') : 'Recordar este concepto';
+  $('mRecordar').checked = true;
+  $('modal').classList.add('show');
+}
+document.querySelectorAll('#segEmp button').forEach(b=>b.addEventListener('click',()=>{
+  modalEmp=b.dataset.e; document.querySelectorAll('#segEmp button').forEach(x=>x.classList.toggle('act',x===b));
+}));
+$('mCancel').addEventListener('click',()=>$('modal').classList.remove('show'));
+$('modal').addEventListener('click',e=>{ if(e.target===$('modal')) $('modal').classList.remove('show'); });
+$('mGuardar').addEventListener('click', async ()=>{
+  const m=MOVS[modalIdx]; const cuenta=$('mCuenta').value.trim(); const etq=$('mEtq').value.trim();
+  if(!cuenta){ alert('Escribe la cuenta COI.'); return; }
+  const esEg = m.cargo>0;
+  m.clase = { dir:esEg?'eg':'ig', empresa:modalEmp, cat:'', cuenta, etiqueta:etq,
+              tipo_poliza:esEg?'Eg':'Ig', estado:'auto', sugerido:false };
+  // recordar
+  if($('mRecordar').checked){
+    const clave = m.beneficiario || norm(m.concepto) || norm(m.desc);
+    const regla = { clave, empresa:modalEmp, cuenta_cargo:esEg?cuenta:'', cuenta_abono:esEg?'':cuenta, tipo_poliza:esEg?'Eg':'Ig', etiqueta:etq };
+    REGLAS[norm(clave)] = regla;
+    await guardarReglaBackend(regla);
+    // re-aplicar a todos los movimientos iguales
+    MOVS.forEach(clasificar);
+  }
+  $('modal').classList.remove('show');
+  render();
+});
+
+async function guardarReglaBackend(regla){
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'guardar_regla',regla})}); }
+  catch(e){ console.warn('No se pudo guardar la regla',e); }
+}
+
+// ===== Exportar a COI =====
+function polizasDeMovs(ms){
+  // cada movimiento contabilizable = 1 póliza de 2 renglones
+  const pol=[];
+  ms.forEach(m=>{
+    if(m.clase.estado!=='auto') return;
+    const monto = m.cargo>0?m.cargo:m.abono;
+    const concepto = (m.clase.etiqueta||m.desc) + (m.beneficiario?(' '+m.beneficiario):'');
+    const banco = CUENTAS.banco;
+    let parts;
+    if(m.cargo>0){ // egreso: cargo cuenta / abono banco
+      parts=[ [m.clase.cuenta, monto, 0], [banco, 0, monto] ];
+    } else { // ingreso: cargo banco / abono cuenta
+      parts=[ [banco, monto, 0], [m.clase.cuenta, 0, monto] ];
+    }
+    pol.push({ tipo:m.clase.tipo_poliza, fecha:m.fechaISO, concepto, empresa:m.clase.empresa, parts });
+  });
+  return pol;
+}
+function exportarDia(d){
+  const ms = MOVS.filter(m=>m.fechaISO===d);
+  const pol = polizasDeMovs(ms);
+  if(!pol.length){ alert('Ese día no tiene movimientos contabilizados todavía. Clasifica los pendientes primero.'); return; }
+  descargarPolizas(pol, 'polizas_banco_'+d+'.xlsx');
+}
+$('btnExpAll').addEventListener('click',()=>{
+  const pol = polizasDeMovs(MOVS);
+  if(!pol.length){ alert('Aún no hay movimientos contabilizados.'); return; }
+  descargarPolizas(pol, 'polizas_banco_'+ANIO+'-'+MESNUM+'.xlsx');
+});
+function descargarPolizas(pol, nombre){
+  const aoa=[['Tipo','Fecha','Concepto','Empresa','Cuenta','Cargo','Abono']];
+  pol.forEach(p=>{
+    p.parts.forEach((pt,idx)=>{
+      aoa.push([ idx===0?p.tipo:'', idx===0?p.fecha:'', idx===0?p.concepto:'', idx===0?p.empresa:'', pt[0], pt[1]||'', pt[2]||'' ]);
+    });
+    aoa.push(['FIN_PARTIDAS','','','','','','']);
+  });
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:6},{wch:12},{wch:40},{wch:10},{wch:18},{wch:13},{wch:13}];
+  const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'Polizas');
+  XLSX.writeFile(wb,nombre);
+}
+</script>
+</body>
+</html>
