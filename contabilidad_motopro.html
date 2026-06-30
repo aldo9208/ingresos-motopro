@@ -310,16 +310,23 @@ function pintarCatalogo(){
   $('cuentasList').innerHTML = [...set].map(c=>'<option value="'+c+'">').join('');
 }
 $('btnGuardarCat').addEventListener('click', async ()=>{
+  const btn=$('btnGuardarCat');
   document.querySelectorAll('#catRows input').forEach(i=>{ CUENTAS[i.dataset.cat]=i.value.trim(); });
-  // Guardar cada categoría como regla CAT:xxx
-  for(const c of CAT_DEF){
-    const val = CUENTAS[c[0]]||'';
-    if(val){ await guardarReglaBackend({clave:'CAT:'+c[0].toUpperCase(), empresa:'', cuenta_cargo:val, cuenta_abono:val, tipo_poliza:'', etiqueta:c[1]}); }
-  }
+  // Feedback inmediato: reclasificar y repintar el tablero al instante
   pintarCatalogo();
   if(MOVS.length){ MOVS.forEach(clasificar); render(); }
-  $('btnGuardarCat').textContent='Guardado ✓';
-  setTimeout(()=>$('btnGuardarCat').textContent='Guardar cuentas',1500);
+  const auto = MOVS.filter(m=>m.clase.estado==='auto').length;
+  const todo = MOVS.filter(m=>m.clase.estado==='todo').length;
+  btn.disabled=true; btn.textContent='Guardando…';
+  // Guardar al backend en paralelo (no bloquea la vista)
+  await Promise.all(CAT_DEF.filter(c=>CUENTAS[c[0]]).map(c=>
+    guardarReglaBackend({clave:'CAT:'+c[0].toUpperCase(), empresa:'', cuenta_cargo:CUENTAS[c[0]], cuenta_abono:CUENTAS[c[0]], tipo_poliza:'', etiqueta:c[1]})
+  ));
+  btn.disabled=false;
+  btn.textContent = MOVS.length ? ('✓ Guardado — '+auto+' contabilizados, '+todo+' por clasificar') : '✓ Cuentas guardadas';
+  $('catBox').removeAttribute('open');
+  if(MOVS.length) $('secTablero').scrollIntoView({behavior:'smooth',block:'start'});
+  setTimeout(()=>btn.textContent='Guardar cuentas', 4000);
 });
 
 // ===== Leer archivo =====
