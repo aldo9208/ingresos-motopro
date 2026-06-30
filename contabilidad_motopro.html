@@ -345,85 +345,79 @@ $('fileBBVA').addEventListener('change', e=>{
   if(/\.pdf$/i.test(f.name)) r.readAsArrayBuffer(f); else r.readAsArrayBuffer(f);
 });
 
-// ===== Parser PDF (todos los movimientos, cargo/abono por columna) =====
-const RE_FECHA = /^\d{2}\/[A-Z]{3}$/i;
+// ===== Parser PDF (robusto: detecta movimientos por texto y columnas por clustering) =====
+const RE_MOVE = /^(\d{2}\/[A-Z]{3})\s+(\d{2}\/[A-Z]{3})\b/i;
 const RE_NUM = /^-?[\d,]+\.\d{2}$/;
 
 async function leerPDF(buf){
   const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-  let cols = null;
-  const lineas = [];
+  const Ls = [];   // {texto, items:[{x,r,s}]}
   for(let p=1;p<=pdf.numPages;p++){
     const page = await pdf.getPage(p);
     const tc = await page.getTextContent();
     let items = tc.items.filter(i=>i.str && i.str.trim())
       .map(i=>({x:i.transform[4], r:i.transform[4]+(i.width||0), y:i.transform[5], s:i.str.trim()}));
     items.sort((a,b)=> b.y-a.y || a.x-b.x);
-    let cur=[], yRef=null; const pls=[];
+    // agrupar en líneas por Y
+    let cur=[], yRef=null;
+    const flush=()=>{ if(cur.length){ cur.sort((a,b)=>a.x-b.x); Ls.push({texto:cur.map(o=>o.s).join(' '), items:cur.slice()}); } };
     items.forEach(it=>{
-      if(yRef===null || Math.abs(it.y-yRef)<=3){ cur.push(it); if(yRef===null) yRef=it.y; }
-      else { pls.push(cur); cur=[it]; yRef=it.y; }
+      if(yRef===null){ cur=[it]; yRef=it.y; }
+      else if(Math.abs(it.y-yRef)<=3.2){ cur.push(it); }
+      else { flush(); cur=[it]; yRef=it.y; }
     });
-    if(cur.length) pls.push(cur);
-    pls.forEach(ln=>{
-      ln.sort((a,b)=>a.x-b.x);
-      const txt = ln.map(o=>o.s).join(' ');
-      const up = txt.toUpperCase();
-      if(!cols && up.includes('CARGOS') && up.includes('ABONOS')){
-        const c = ln.find(o=>/CARGOS/i.test(o.s));
-        const a = ln.find(o=>/ABONOS/i.test(o.s));
-        const o = ln.find(o=>/OPERACI/i.test(o.s));
-        if(c && a) cols = {c:c.r, a:a.r, o:o?o.r:a.r+70};
-      }
-      const mP = up.match(/DEL\s+(\d{2})\/(\d{2})\/(\d{4})/);
-      if(mP){ MESNUM=mP[2]; ANIO=parseInt(mP[3],10); }
-      lineas.push({txt, items:ln});
-    });
+    flush();
   }
-  if(!cols) cols = {c:520, a:600, o:660};
+  // periodo (año/mes)
+  for(const L of Ls){ const mP=L.texto.toUpperCase().match(/DEL\s+(\d{2})\/(\d{2})\/(\d{4})/); if(mP){ MESNUM=mP[2]; ANIO=parseInt(mP[3],10); break; } }
+  MOVS = armarMovs(Ls);
   $('periodo').classList.remove('hidden');
-  $('periodo').textContent = '📅 Periodo '+MESNUM+'/'+ANIO+' · cuenta 0178926441';
-  MOVS = armarMovs(lineas, cols);
+  if(!MOVS.length){
+    $('periodo').innerHTML = '<span style="color:var(--red);font-weight:700">⚠️ No reconocí movimientos en este PDF. Asegúrate de que sea el estado de cuenta de BBVA (no un recibo). Si persiste, avísame.</span>';
+  } else {
+    $('periodo').textContent = '📅 Periodo '+MESNUM+'/'+ANIO+' · '+MOVS.length+' movimientos leídos';
+  }
 }
 
-function armarMovs(lineas, cols){
-  const out = []; let cur=null; let refs=[];
-  function cerrar(){
-    if(cur){
-      cur.ref = refs.join(' · ');
-      cur.beneficiario = detBenef(refs);
-      cur.concepto = detConcepto(refs, cur.desc);
-      out.push(cur);
+function armarMovs(Ls){
+  // 1) columnas por clustering de las X-derecha de los montos en líneas de movimiento
+  const xs=[];
+  Ls.forEach(L=>{ if(RE_MOVE.test(L.texto)){ L.items.forEach(it=>{ if(RE_NUM.test(it.s)) xs.push(it.r); }); } });
+  let cols=[414,463,526,598]; // respaldo
+  if(xs.length>6){
+    xs.sort((a,b)=>a-b);
+    cols=[]; let grp=[xs[0]];
+    for(let i=1;i<xs.length;i++){
+      if(xs[i]-grp[grp.length-1]>15){ cols.push(grp.reduce((a,b)=>a+b,0)/grp.length); grp=[xs[i]]; }
+      else grp.push(xs[i]);
     }
+    cols.push(grp.reduce((a,b)=>a+b,0)/grp.length);
+  }
+  cols.sort((a,b)=>a-b);
+  // 2) armar movimientos
+  const out=[]; let cur=null; let refs=[];
+  function cerrar(){
+    if(cur){ cur.ref=refs.join(' · '); cur.beneficiario=detBenef(refs); cur.concepto=detConcepto(refs,cur.desc); out.push(cur); }
     cur=null; refs=[];
   }
-  lineas.forEach(L=>{
-    const it = L.items;
-    if(it.length>=2 && RE_FECHA.test(it[0].s) && RE_FECHA.test(it[1].s)){
+  Ls.forEach(L=>{
+    const m = L.texto.match(RE_MOVE);
+    if(m){
       cerrar();
-      const desc=[]; const montos=[];
-      for(let k=2;k<it.length;k++){
-        if(RE_NUM.test(it[k].s)) montos.push(it[k]);
-        else if(!montos.length) desc.push(it[k].s);
-      }
-      cur = {fecha:it[0].s, desc:desc.join(' ').trim(), cargo:0, abono:0};
-      montos.forEach(m=>{
-        const val = parseFloat(m.s.replace(/,/g,''));
-        const dc=Math.abs(m.r-cols.c), da=Math.abs(m.r-cols.a), dO=Math.abs(m.r-cols.o);
-        const mn=Math.min(dc,da,dO);
-        if(mn===dc && dc<da-1) cur.cargo=val;
-        else if(mn===da) cur.abono=val;
-        // si cae en saldo (o) se ignora
+      let desc = L.texto.replace(/^\d{2}\/[A-Z]{3}\s+\d{2}\/[A-Z]{3}\s+/i,'');
+      desc = desc.split(/\s+-?[\d,]+\.\d{2}/)[0].trim();
+      const dd = m[1].split('/')[0]; const mes = MESES[norm(m[1].split('/')[1])]||MESNUM;
+      cur = {fecha:m[1], fechaISO:ANIO+'-'+mes+'-'+dd, desc, cargo:0, abono:0};
+      L.items.forEach(it=>{
+        if(!RE_NUM.test(it.s)) return;
+        const val = parseFloat(it.s.replace(/,/g,''));
+        let nearest=0, best=1e9;
+        cols.forEach((c,idx)=>{ const d=Math.abs(it.r-c); if(d<best){ best=d; nearest=idx; } });
+        if(nearest===0) cur.cargo=val; else if(nearest===1) cur.abono=val;
       });
-      // fecha ISO
-      const mm=cur.fecha.split('/'); const dd=mm[0]; const mes=MESES[norm(mm[1])]||MESNUM;
-      cur.fechaISO = ANIO+'-'+mes+'-'+dd;
-    } else if(cur){
-      refs.push(L.txt);
-    }
+    } else if(cur){ refs.push(L.texto); }
   });
   cerrar();
-  // descartar líneas basura (sin cargo ni abono y desc vacía)
   return out.filter(m=>m.desc && (m.cargo>0 || m.abono>0));
 }
 
