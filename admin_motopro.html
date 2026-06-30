@@ -18,6 +18,7 @@
   .wrap{max-width:760px;margin:0 auto;padding:0 16px}
   header{background:var(--ink);color:#fff;padding:18px 0 16px}
   header .wrap{display:flex;align-items:center;gap:12px}
+  .link-pol{margin-left:auto;text-decoration:none;background:var(--blue-soft);color:var(--blue);font-size:13px;font-weight:700;padding:9px 14px;border-radius:10px;white-space:nowrap}
   .logo{width:38px;height:38px;border-radius:9px;background:var(--amber);display:grid;place-items:center;flex:0 0 auto;font-weight:800;font-size:18px;color:#19170F;letter-spacing:-1px}
   header h1{font-size:18px;font-weight:700;letter-spacing:-.2px;line-height:1.1}
   header .sub{font-size:12px;color:#B8B2A4;font-weight:500;margin-top:1px}
@@ -97,6 +98,38 @@
   .modal.open{display:grid}
   .modal img{max-width:100%;max-height:85vh;border-radius:10px}
   .hidden{display:none}
+  /* Bolsa de excedentes */
+  .bolsa-top{display:flex;gap:14px;align-items:stretch;flex-wrap:wrap;margin-bottom:6px}
+  .bolsa-saldo{background:var(--green-soft);border-radius:12px;padding:14px 18px;flex:1;min-width:170px}
+  .bolsa-saldo .l{font-size:11px;font-weight:700;color:var(--green);text-transform:uppercase;letter-spacing:.4px}
+  .bolsa-saldo .v{font-size:30px;font-weight:800;color:var(--green);letter-spacing:-.5px;margin-top:2px}
+  .bolsa-mini{display:flex;flex-direction:column;gap:7px;justify-content:center;min-width:180px}
+  .bolsa-mini label{font-size:11px;font-weight:700;color:var(--ink-soft)}
+  .bolsa-kv{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--ink-soft);border-top:1px solid var(--line);padding-top:6px}
+  .bolsa-inp{display:flex;align-items:center;gap:4px;border:1px solid var(--line);border-radius:8px;padding:5px 9px;background:#FCFBF8;margin-top:3px}
+  .bolsa-inp span{color:var(--ink-soft);font-size:13px}
+  .bolsa-inp input{border:none;background:none;width:100%;font-size:14px;font-family:inherit;outline:none}
+  .bolsa-sub{font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--amber);margin:14px 0 8px}
+  .bolsa-head{display:flex;align-items:center;justify-content:space-between;margin:16px 0 8px}
+  .pe-row,.bm-row{display:flex;align-items:center;gap:11px;padding:9px 11px;border:1px solid var(--line);border-radius:10px;margin-bottom:7px;background:#fff}
+  .pe-row .pe-mid,.bm-row .bm-mid{flex:1;min-width:0}
+  .pe-row .l1,.bm-row .l1{font-weight:700;font-size:13.5px}
+  .pe-row .l2,.bm-row .l2{font-size:11.5px;color:var(--ink-soft)}
+  .bm-amt{font-weight:700;font-size:13.5px}
+  .bm-amt.in{color:var(--green)}.bm-amt.out{color:var(--red)}
+  .pe-amt{font-weight:700;color:var(--amber);font-size:13.5px}
+  .bm-del{cursor:pointer;color:var(--ink-soft);font-size:16px;border:none;background:none;padding:2px 6px;border-radius:6px}
+  .bm-del:hover{background:var(--red-soft);color:var(--red)}
+  .sheetG{background:#fff;border-radius:16px;max-width:420px;width:100%;padding:20px;max-height:90vh;overflow:auto}
+  .sheetG h3{font-size:16px;font-weight:700;margin-bottom:14px}
+  .fldG{margin-bottom:13px}
+  .fldG label{display:block;font-size:12px;font-weight:700;color:var(--ink-soft);margin-bottom:5px}
+  .fldG input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px;font-size:14px;font-family:inherit;background:#FCFBF8}
+  .fldG.row2{display:flex;gap:10px}.fldG.row2>div{flex:1}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+  .chip{border:1px solid var(--line);background:#FCFBF8;border-radius:16px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer}
+  .chip:hover{background:var(--amber-soft);border-color:var(--amber)}
+  .rowG{display:flex;gap:9px;margin-top:6px}.rowG .btn{flex:1;text-align:center;justify-content:center}
 </style>
 </head>
 <body>
@@ -108,6 +141,7 @@
       <h1>Ingresos Moto Pro · Admin</h1>
       <div class="sub">Conciliación de tarjetas con BBVA</div>
     </div>
+    <a href="polizas_motopro.html" class="link-pol">🧾 Pólizas COI</a>
   </div>
 </header>
 
@@ -162,6 +196,34 @@
 
   <section>
     <div class="card">
+      <div class="eyebrow">Bolsa de excedentes</div>
+      <div class="bolsa-top">
+        <div class="bolsa-saldo">
+          <div class="l">Saldo disponible</div>
+          <div class="v num" id="bolsaSaldo">$0</div>
+        </div>
+        <div class="bolsa-mini">
+          <label>Saldo inicial<div class="bolsa-inp"><span>$</span><input id="bolsaInicial" type="number" step="0.01" inputmode="decimal" value="0"></div></label>
+          <div class="bolsa-kv"><span>+ Entregado</span><b class="num" id="bolsaEntrado">$0</b></div>
+          <div class="bolsa-kv"><span>− Gastos</span><b class="num" id="bolsaGastos">$0</b></div>
+        </div>
+      </div>
+
+      <div id="porEntregarWrap" class="hidden">
+        <div class="bolsa-sub">Excedentes por entregar</div>
+        <div id="porEntregar"></div>
+      </div>
+
+      <div class="bolsa-head">
+        <span class="bolsa-sub" style="margin:0">Movimientos de la bolsa</span>
+        <button class="btn sm" id="btnGasto">+ Registrar gasto</button>
+      </div>
+      <div id="bolsaMovs"><div class="loading">Cargando bolsa…</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="card">
       <div class="topbar">
         <div class="eyebrow" style="margin:0;flex:1">3 · Cortes registrados</div>
         <button class="btn" id="btnRefrescar">↻ Refrescar</button>
@@ -179,13 +241,32 @@
 
 <div class="modal" id="modal"><img id="modalImg" src=""></div>
 
+<div class="modal" id="modalGasto">
+  <div class="sheetG">
+    <h3 id="gTit">Registrar gasto de la bolsa</h3>
+    <div class="fldG">
+      <label>Concepto</label>
+      <div class="chips" id="gChips"></div>
+      <input id="gConcepto" placeholder="ej. Rancho Aldo" autocomplete="off">
+    </div>
+    <div class="fldG row2">
+      <div><label>Importe</label><div class="bolsa-inp"><span>$</span><input id="gImporte" type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div></div>
+      <div><label>Fecha</label><input id="gFecha" type="date"></div>
+    </div>
+    <div class="rowG">
+      <button class="btn" id="gCancel">Cancelar</button>
+      <button class="btn amber" id="gGuardar">Guardar gasto</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
 const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOSlbeurweuhxq_h9HXGtv7wxkggm9QpvJQgWFmSty1u-cWVQ/exec";
 // ============================================================
 
 const $ = id => document.getElementById(id);
-let cortes=[], ventasPorCorte={}, bbva=null, facturas=null;
+let cortes=[], ventasPorCorte={}, bbva=null, facturas=null, BOLSA=[];
 const fmt = n => '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const near = (a,b) => Math.abs(Number(a)-Number(b)) <= 0.01;
 
@@ -207,6 +288,7 @@ async function cargarCortes(){
     conciliar();
     revisarFacturacion();
     render();
+    cargarBolsa();
   }catch(err){
     $('listaCortes').innerHTML='<div class="loading">No pude cargar los cortes.<br>'+err+'</div>';
   }
@@ -526,6 +608,114 @@ async function verVoucher(id,btn){
 }
 $('modal').onclick=()=>$('modal').classList.remove('open');
 $('btnRefrescar').onclick=cargarCortes;
+
+// ============================================================
+// BOLSA DE EXCEDENTES
+// ============================================================
+const CONCEPTOS = ['Nómina Aldo','Nómina semanal','Doña Irma','Finiquito','Gastos no deducibles','Gastos facturación','Renta matriz','Rancho Aldo','Bono','Proveedor','Contadora'];
+
+async function cargarBolsa(){
+  try{
+    const res = await fetch(API_URL+'?action=bolsa_movs');
+    const data = await res.json();
+    BOLSA = (data.ok && data.movs) ? data.movs : [];
+  }catch(e){ BOLSA=[]; }
+  renderBolsa();
+}
+
+function renderBolsa(){
+  const inicial = BOLSA.filter(m=>m.tipo==='inicial').reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const entradas = BOLSA.filter(m=>m.tipo==='entrada');
+  const salidas  = BOLSA.filter(m=>m.tipo==='salida');
+  const totEnt = entradas.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const totGas = salidas.reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const saldo = inicial + totEnt - totGas;
+
+  $('bolsaSaldo').textContent = fmt(saldo);
+  $('bolsaEntrado').textContent = fmt(totEnt);
+  $('bolsaGastos').textContent = fmt(totGas);
+  if(document.activeElement !== $('bolsaInicial')) $('bolsaInicial').value = inicial || 0;
+
+  // Excedentes por entregar: cortes con excedente que aún no tienen entrada en la bolsa
+  const yaEntregados = new Set(entradas.map(m=>String(m.ref_corte)));
+  const porEntregar = cortes.filter(c=>(Number(c.excedente_efvo)||0) > 0 && !yaEntregados.has(String(c.id_corte)));
+  if(porEntregar.length){
+    $('porEntregarWrap').classList.remove('hidden');
+    $('porEntregar').innerHTML = porEntregar.map(c=>
+      '<div class="pe-row">'+
+        '<div class="pe-mid"><div class="l1">'+(c.fecha||c.id_corte)+'</div><div class="l2">Corte '+c.id_corte+'</div></div>'+
+        '<div class="pe-amt">'+fmt(c.excedente_efvo)+'</div>'+
+        '<button class="btn amber sm" onclick="entregar(\''+String(c.id_corte).replace(/'/g,"")+'\')">Entregado</button>'+
+      '</div>').join('');
+  } else {
+    $('porEntregarWrap').classList.add('hidden');
+    $('porEntregar').innerHTML='';
+  }
+
+  // Movimientos de la bolsa (entradas + salidas), recientes primero
+  const movs = BOLSA.filter(m=>m.tipo!=='inicial')
+    .sort((a,b)=> String(b.fecha||b.creado).localeCompare(String(a.fecha||a.creado)));
+  if(!movs.length){
+    $('bolsaMovs').innerHTML='<div class="loading">Aún no hay movimientos. Marca un excedente como entregado o registra un gasto.</div>';
+  } else {
+    $('bolsaMovs').innerHTML = movs.map(m=>{
+      const inn = m.tipo==='entrada';
+      const fecha = (m.fecha||'').toString().slice(0,10);
+      return '<div class="bm-row">'+
+        '<div class="bm-mid"><div class="l1">'+(inn?'Excedente entregado':(m.concepto||'Gasto'))+'</div>'+
+        '<div class="l2">'+fecha+(inn&&m.ref_corte?(' · corte '+m.ref_corte):'')+'</div></div>'+
+        '<div class="bm-amt '+(inn?'in':'out')+'">'+(inn?'+':'−')+fmt(m.importe)+'</div>'+
+        '<button class="bm-del" title="Borrar" onclick="borrarMov(\''+String(m.id).replace(/'/g,"")+'\')">✕</button>'+
+      '</div>';
+    }).join('');
+  }
+}
+
+window.entregar = async function(idCorte){
+  const c = cortes.find(x=>String(x.id_corte)===String(idCorte)); if(!c) return;
+  const hoy = new Date().toISOString().slice(0,10);
+  const mov = { id:'B'+Date.now(), fecha:hoy, tipo:'entrada', concepto:'Excedente entregado', importe:Number(c.excedente_efvo)||0, ref_corte:String(c.id_corte) };
+  BOLSA.push(mov); renderBolsa();
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_mov',mov})}); }catch(e){}
+};
+
+window.borrarMov = async function(id){
+  if(!confirm('¿Quitar este movimiento de la bolsa?')) return;
+  BOLSA = BOLSA.filter(m=>String(m.id)!==String(id)); renderBolsa();
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_borrar',id})}); }catch(e){}
+};
+
+// Saldo inicial (editable)
+let tSaldo=null;
+$('bolsaInicial').addEventListener('input', ()=>{
+  clearTimeout(tSaldo);
+  tSaldo = setTimeout(async ()=>{
+    const val = Number($('bolsaInicial').value)||0;
+    BOLSA = BOLSA.filter(m=>m.tipo!=='inicial');
+    const mov = { id:'INI', fecha:'', tipo:'inicial', concepto:'Saldo inicial', importe:val, ref_corte:'' };
+    BOLSA.push(mov); renderBolsa();
+    try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_mov',mov})}); }catch(e){}
+  }, 700);
+});
+
+// Modal registrar gasto
+$('gChips').innerHTML = CONCEPTOS.map(c=>'<span class="chip" onclick="document.getElementById(\'gConcepto\').value=this.textContent">'+c+'</span>').join('');
+$('btnGasto').onclick = ()=>{
+  $('gConcepto').value=''; $('gImporte').value='';
+  $('gFecha').value = new Date().toISOString().slice(0,10);
+  $('modalGasto').classList.add('open');
+};
+$('gCancel').onclick = ()=>$('modalGasto').classList.remove('open');
+$('modalGasto').onclick = e=>{ if(e.target===$('modalGasto')) $('modalGasto').classList.remove('open'); };
+$('gGuardar').onclick = async ()=>{
+  const concepto=$('gConcepto').value.trim(); const importe=Number($('gImporte').value)||0; const fecha=$('gFecha').value;
+  if(!concepto){ alert('Escribe el concepto del gasto.'); return; }
+  if(!importe){ alert('Escribe el importe.'); return; }
+  const mov = { id:'B'+Date.now(), fecha, tipo:'salida', concepto, importe, ref_corte:'' };
+  BOLSA.push(mov); renderBolsa();
+  $('modalGasto').classList.remove('open');
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_mov',mov})}); }catch(e){}
+};
 
 cargarCortes();
 </script>
