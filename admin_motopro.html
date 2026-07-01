@@ -492,8 +492,17 @@ function conciliar(){
 
 function consumirDeposito(monto){
   if(!bbva) return false;
-  const d = bbva.depositos.find(x=>!x.usado && near(x.monto,monto));
-  if(d){ d.usado=true; return true; }
+  // El depósito real = monto de la factura global, que difiere del cálculo
+  // teórico por el redondeo de la factura. Toleramos esa diferencia y
+  // elegimos el depósito no usado más cercano al esperado.
+  const TOL = 0.10;
+  let mejor=null, mejorDif=Infinity;
+  bbva.depositos.forEach(x=>{
+    if(x.usado) return;
+    const dif = Math.abs(Number(x.monto) - Number(monto));
+    if(dif <= TOL && dif < mejorDif){ mejor=x; mejorDif=dif; }
+  });
+  if(mejor){ mejor.usado=true; return true; }
   return false;
 }
 
