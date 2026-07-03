@@ -475,25 +475,29 @@ function conciliar(){
   const nuevos=[];
   orden.forEach(c=>{
     const td=Number(c.debito)||0, tc=Number(c.credito)||0;
+    const depEsp = Number(c.deposito_efectivo)||0;
+    c._depEsp = depEsp;
     // Si ya quedó guardado como conciliado, se respeta aunque no haya BBVA cargado
     if(String(c.estado||'').toLowerCase()==='conciliado'){
-      c._estado='ok'; c._mTD = td>0?true:'na'; c._mTC = tc>0?true:'na';
+      c._estado='ok';
+      c._mTD = td>0?true:'na';
+      c._mTC = tc>0?true:'na';
+      c._depOk = depEsp>0 ? true : null;
     } else {
       c._mTD = td>0 ? consumir('TD',td) : 'na';
       c._mTC = tc>0 ? consumir('TC',tc) : 'na';
-      if(td===0 && tc===0) c._estado='nt';
+      c._depOk = (depEsp>0 && bbva) ? consumirDeposito(depEsp) : (depEsp>0 ? false : null);
+      if(td===0 && tc===0 && depEsp===0) c._estado='nt';
       else if(!bbva) c._estado='wait';
       else {
         const faltaTD = td>0 && !c._mTD;
         const faltaTC = tc>0 && !c._mTC;
-        c._estado = (!faltaTD && !faltaTC) ? 'ok' : 'pend';
+        const faltaDep = depEsp>0 && !c._depOk;
+        c._estado = (!faltaTD && !faltaTC && !faltaDep) ? 'ok' : 'pend';
+        // Solo se guarda como conciliado cuando TODO cuadra (tarjetas + depósito)
         if(c._estado==='ok'){ c.estado='conciliado'; nuevos.push(String(c.id_corte)); }
       }
     }
-    // Depósito en efectivo esperado vs banco
-    const depEsp = Number(c.deposito_efectivo)||0;
-    c._depEsp = depEsp;
-    c._depOk = (depEsp>0 && bbva) ? consumirDeposito(depEsp) : null;
   });
   if(nuevos.length) persistirConciliados(nuevos);
 }
