@@ -323,54 +323,62 @@ function setBBVA(d){
   render();
 }
 
-// ---- PDF de BBVA ----
-const _MON = /-?\$[\d,]+\.\d{2}/g;
+// ---- PDF de BBVA (lector robusto: detecta renglones por texto y columnas por clustering) ----
+const _MON = /-?\$?[\d,]+\.\d{2}/g;
 const _num = s => parseFloat(s.replace(/[$,]/g,''))||0;
+const RE_MOVE_A = /^(\d{2}\/[A-Z]{3})\s+(\d{2}\/[A-Z]{3})\b/i;
+const RE_NUM_A = /^-?[\d,]+\.\d{2}$/;
 
 async function parsePDF(buf){
   const pdf = await pdfjsLib.getDocument({data:buf}).promise;
-  let lineas=[];
+  const Ls=[];
   for(let p=1;p<=pdf.numPages;p++){
     const page=await pdf.getPage(p);
     const tc=await page.getTextContent();
-    const items=tc.items.filter(i=>i.str && i.str.trim())
-      .map(i=>({x:i.transform[4], y:i.transform[5], s:i.str}))
-      .sort((a,b)=> b.y-a.y || a.x-b.x);
+    let items=tc.items.filter(i=>i.str && i.str.trim())
+      .map(i=>({r:i.transform[4]+(i.width||0), y:i.transform[5], s:i.str.trim()}));
+    items.sort((a,b)=> b.y-a.y || a.r-b.r);
     let cur=[], yRef=null;
+    const flush=()=>{ if(cur.length){ cur.sort((a,b)=>a.r-b.r); Ls.push({texto:cur.map(o=>o.s).join(' '), items:cur.slice()}); } };
     items.forEach(it=>{
-      if(yRef===null || Math.abs(it.y-yRef)<=6){ cur.push(it); if(yRef===null) yRef=it.y; }
-      else { lineas.push(cur); cur=[it]; yRef=it.y; }
+      if(yRef===null){ cur=[it]; yRef=it.y; }
+      else if(Math.abs(it.y-yRef)<=3.2){ cur.push(it); }
+      else { flush(); cur=[it]; yRef=it.y; }
     });
-    if(cur.length) lineas.push(cur);
+    flush();
   }
-  const textos = lineas.map(arr => arr.sort((a,b)=>a.x-b.x).map(o=>o.s).join(' '));
-  setBBVA(procesarBBVA(textos));
+  setBBVA(procesarBBVA(Ls));
 }
 
-// Parser con estado: las ventas traen su monto en la misma línea;
-// la comisión y el IVA traen el monto en renglón aparte.
-function procesarBBVA(lineas){
+// Detecta ventas TD/TC (abono), comisiones e IVA (cargo) y depósitos en efectivo (abono)
+function procesarBBVA(Ls){
+  // columnas por clustering de X-derecha de los montos
+  const xs=[];
+  Ls.forEach(L=>{ if(RE_MOVE_A.test(L.texto)){ L.items.forEach(it=>{ if(RE_NUM_A.test(it.s)) xs.push(it.r); }); } });
+  let cols=[414,463,526,598];
+  if(xs.length>6){
+    xs.sort((a,b)=>a-b); cols=[]; let g=[xs[0]];
+    for(let i=1;i<xs.length;i++){ if(xs[i]-g[g.length-1]>15){ cols.push(g.reduce((a,b)=>a+b,0)/g.length); g=[xs[i]]; } else g.push(xs[i]); }
+    cols.push(g.reduce((a,b)=>a+b,0)/g.length);
+  }
+  cols.sort((a,b)=>a-b);
   const d={lotes:[],totTD:0,totTC:0,comi:0,iva:0,depositos:[],depEf:0};
-  let pend=null;
-  lineas.forEach(ln=>{
-    const flat=ln.replace(/\s/g,'').toUpperCase();
-    const montos=(flat.match(_MON)||[]).map(_num);
-    const ventaTD = flat.includes('VENTASDEBITO') && flat.includes('PUNTODEVENTA');
-    const ventaTC = flat.includes('VENTASCREDITO') && flat.includes('PUNTODEVENTA');
-    const esApli = flat.includes('APLITASADEDES');
-    const esIva  = flat.includes('IVATASA') && flat.includes('DESC');
-    const esDep  = flat.includes('DEPOSITOENEFECTIVO');
-    if(ventaTD && montos.length){ d.totTD+=montos[0]; d.lotes.push({tipo:'TD',bruto:montos[0],usado:false}); pend=null; }
-    else if(ventaTC && montos.length){ d.totTC+=montos[0]; d.lotes.push({tipo:'TC',bruto:montos[0],usado:false}); pend=null; }
-    else if(esDep && montos.length){ d.depEf+=montos[0]; d.depositos.push({monto:montos[0],usado:false}); pend=null; }
-    else if(esApli || esIva){
-      if(montos.length){ if(esApli) d.comi+=Math.abs(montos[0]); else d.iva+=Math.abs(montos[0]); pend=null; }
-      else pend = esApli ? 'comi' : 'iva';
-    }
-    else if(montos.length && pend){
-      if(pend==='comi') d.comi+=Math.abs(montos[0]); else d.iva+=Math.abs(montos[0]);
-      pend=null;
-    }
+  Ls.forEach(L=>{
+    if(!RE_MOVE_A.test(L.texto)) return;
+    let cargo=0, abono=0;
+    L.items.forEach(it=>{
+      if(!RE_NUM_A.test(it.s)) return;
+      const val=parseFloat(it.s.replace(/,/g,''));
+      let nearest=0,best=1e9;
+      cols.forEach((c,idx)=>{ const dd=Math.abs(it.r-c); if(dd<best){ best=dd; nearest=idx; } });
+      if(nearest===0) cargo=val; else if(nearest===1) abono=val;
+    });
+    const U=L.texto.toUpperCase();
+    if(/VENTAS DEBITO/.test(U) && abono){ d.totTD+=abono; d.lotes.push({tipo:'TD',bruto:abono,usado:false}); }
+    else if(/VENTAS CREDITO/.test(U) && abono){ d.totTC+=abono; d.lotes.push({tipo:'TC',bruto:abono,usado:false}); }
+    else if(/DEPOSITO EN EFECTIVO/.test(U) && abono){ d.depEf+=abono; d.depositos.push({monto:abono,usado:false}); }
+    else if(/APLI TASA DE DES|COM VTAS TDC/.test(U) && cargo){ d.comi+=cargo; }
+    else if(/IVA TASA DE DESC|IVA COM/.test(U) && cargo){ d.iva+=cargo; }
   });
   return d;
 }
