@@ -636,15 +636,30 @@ $('btnRefrescar').onclick=cargarCortes;
 const CONCEPTOS = ['Nómina Aldo','Nómina semanal','Doña Irma','Finiquito','Gastos no deducibles','Gastos facturación','Renta matriz','Rancho Aldo','Bono','Proveedor','Contadora'];
 
 async function cargarBolsa(){
+  const cont = $('bolsaMovs');
   try{
-    const res = await fetch(API_URL+'?action=bolsa_movs');
-    const data = await res.json();
-    BOLSA = (data.ok && data.movs) ? data.movs : [];
-  }catch(e){ BOLSA=[]; }
+    const res = await fetch(API_URL+'?action=bolsa_movs&t='+Date.now(), {cache:'no-store'});
+    const txt = await res.text();
+    let data;
+    try{ data = JSON.parse(txt); }
+    catch(pe){
+      cont.innerHTML='<div class="loading">El backend respondió algo que no pude leer para la bolsa.<br>Detalle: '+txt.slice(0,150)+'</div>';
+      return;
+    }
+    if(!data || !data.ok){
+      cont.innerHTML='<div class="loading">El backend no reconoce la bolsa. Falta republicar con «Nueva versión».<br>Respuesta: '+JSON.stringify(data).slice(0,150)+'</div>';
+      BOLSA=[]; return;
+    }
+    BOLSA = data.movs || [];
+  }catch(e){
+    cont.innerHTML='<div class="loading">No pude conectar con el backend para la bolsa.<br>'+e+'</div>';
+    return;
+  }
   renderBolsa();
 }
 
 function renderBolsa(){
+ try{
   const inicial = BOLSA.filter(m=>m.tipo==='inicial').reduce((s,m)=>s+(Number(m.importe)||0),0);
   const entradas = BOLSA.filter(m=>m.tipo==='entrada');
   const salidas  = BOLSA.filter(m=>m.tipo==='salida');
@@ -690,6 +705,9 @@ function renderBolsa(){
       '</div>';
     }).join('');
   }
+ }catch(e){
+  $('bolsaMovs').innerHTML='<div class="loading">No pude mostrar la bolsa: '+e+'</div>';
+ }
 }
 
 window.entregar = async function(idCorte){
