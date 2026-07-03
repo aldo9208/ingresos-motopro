@@ -318,9 +318,16 @@ function setBBVA(d){
   $('mTC').textContent=fmt(bbva.totTC);
   $('mCom').textContent=fmt(bbva.comi+bbva.iva);
   $('mNeto').textContent=fmt(bbva.totTD+bbva.totTC-bbva.comi-bbva.iva);
+  // Diagnóstico visible de lo que se leyó del estado de cuenta
+  const nDep=(bbva.depositos||[]).length, nLot=(bbva.lotes||[]).length;
+  let dg=$('bbvaDiag');
+  if(!dg){ dg=document.createElement('div'); dg.id='bbvaDiag'; dg.style.cssText='font-size:12.5px;margin-top:10px;padding:9px 11px;border-radius:9px;background:var(--gray-soft)'; $('resumenBBVA').appendChild(dg); }
+  dg.innerHTML='Leído del estado de cuenta: <b>'+nLot+'</b> ventas de tarjeta · <b>'+nDep+' depósitos en efectivo</b> ('+fmt(bbva.depEf)+') · comisiones '+fmt(bbva.comi+bbva.iva)
+    + (nDep===0 ? '<br><span style="color:var(--red);font-weight:700">⚠️ No detecté depósitos en efectivo. Puede que el archivo no sea el PDF del estado de cuenta mensual de BBVA. Dime cómo lo exportas y lo ajusto.</span>' : '');
   conciliar();
   revisarFacturacion();
   render();
+  pintarEfectivo();
 }
 
 // ---- PDF de BBVA (lector robusto: detecta renglones por texto y columnas por clustering) ----
