@@ -266,7 +266,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOS
 // ============================================================
 
 const $ = id => document.getElementById(id);
-let cortes=[], ventasPorCorte={}, bbva=null, facturas=null, BOLSA=[];
+let cortes=[], ventasPorCorte={}, bbva=null, facturas=null, BOLSA=[], DEPS_CONC=new Set();
 const fmt = n => '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const near = (a,b) => Math.abs(Number(a)-Number(b)) <= 0.01;
 
@@ -276,10 +276,11 @@ if(!API_URL) $('avisoConfig').classList.remove('hidden');
 async function cargarCortes(){
   $('listaCortes').innerHTML='<div class="loading">Cargando cortes…</div>';
   try{
-    const res = await fetch(API_URL + '?action=obtener_cortes&con_ventas=1');
+    const res = await fetch(API_URL + '?action=obtener_cortes&con_ventas=1&t='+Date.now(), {cache:'no-store'});
     const data = await res.json();
     if(!data.ok) throw new Error(data.error||'error');
     cortes = (data.cortes||[]).sort((a,b)=> String(b.fecha).localeCompare(String(a.fecha)));
+    DEPS_CONC = new Set((data.deps_conciliados||[]).map(String));
     ventasPorCorte = {};
     (data.ventas||[]).forEach(v=>{
       const k = String(v.id_corte);
@@ -520,34 +521,49 @@ function parseBBVA(buf){
 function conciliar(){
   if(bbva){ bbva.lotes.forEach(l=>l.usado=false); bbva.depositos.forEach(d=>d.usado=false); }
   const orden = [...cortes].sort((a,b)=> String(a.fecha).localeCompare(String(b.fecha)));
-  const nuevos=[];
+  const nuevosTarj=[], nuevosDep=[];
   orden.forEach(c=>{
     const td=Number(c.debito)||0, tc=Number(c.credito)||0;
     const depEsp = Number(c.deposito_efectivo)||0;
+    const id = String(c.id_corte);
     c._depEsp = depEsp;
-    // Si ya quedó guardado como conciliado, se respeta aunque no haya BBVA cargado
-    if(String(c.estado||'').toLowerCase()==='conciliado'){
-      c._estado='ok';
-      c._mTD = td>0?true:'na';
-      c._mTC = tc>0?true:'na';
-      c._depOk = depEsp>0 ? true : null;
+    const tarjGuardado = String(c.estado||'').toLowerCase()==='conciliado';
+    const depGuardado  = DEPS_CONC.has(id);
+
+    // --- Tarjetas (se guardan solas cuando cuadran) ---
+    if(tarjGuardado){
+      c._mTD = td>0?true:'na'; c._mTC = tc>0?true:'na';
     } else {
       c._mTD = td>0 ? consumir('TD',td) : 'na';
       c._mTC = tc>0 ? consumir('TC',tc) : 'na';
-      c._depOk = (depEsp>0 && bbva) ? consumirDeposito(depEsp) : (depEsp>0 ? false : null);
-      if(td===0 && tc===0 && depEsp===0) c._estado='nt';
-      else if(!bbva) c._estado='wait';
-      else {
-        const faltaTD = td>0 && !c._mTD;
-        const faltaTC = tc>0 && !c._mTC;
-        const faltaDep = depEsp>0 && !c._depOk;
-        c._estado = (!faltaTD && !faltaTC && !faltaDep) ? 'ok' : 'pend';
-        // Solo se guarda como conciliado cuando TODO cuadra (tarjetas + depósito)
-        if(c._estado==='ok'){ c.estado='conciliado'; nuevos.push(String(c.id_corte)); }
-      }
+      const tarjOk = (td>0||tc>0) && (td===0||c._mTD===true) && (tc===0||c._mTC===true);
+      if(tarjOk && bbva){ c.estado='conciliado'; nuevosTarj.push(id); }
     }
+
+    // --- Depósito en efectivo (se guarda solo cuando cuadra, aparte de las tarjetas) ---
+    if(depGuardado){
+      c._depOk = true;
+    } else if(depEsp>0 && bbva){
+      c._depOk = consumirDeposito(depEsp);
+      if(c._depOk){ DEPS_CONC.add(id); nuevosDep.push(id); }
+    } else {
+      c._depOk = depEsp>0 ? false : null;
+    }
+
+    // --- Estado visual combinado ---
+    const faltaTarj = (td>0 && c._mTD!==true) || (tc>0 && c._mTC!==true);
+    const faltaDep  = depEsp>0 && !c._depOk;
+    if(td===0 && tc===0 && depEsp===0) c._estado='nt';
+    else if(!bbva && !tarjGuardado && !depGuardado) c._estado='wait';
+    else c._estado = (!faltaTarj && !faltaDep) ? 'ok' : 'pend';
   });
-  if(nuevos.length) persistirConciliados(nuevos);
+  if(nuevosTarj.length) persistirConciliados(nuevosTarj);
+  if(nuevosDep.length) marcarDepBackend(nuevosDep);
+}
+
+function marcarDepBackend(ids){
+  try{ fetch(API_URL,{method:'POST',body:JSON.stringify({action:'marcar_dep',ids})}); }
+  catch(err){ console.error('No se pudo guardar el depósito conciliado:',err); }
 }
 
 function consumirDeposito(monto){
