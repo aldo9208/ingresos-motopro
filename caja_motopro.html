@@ -132,6 +132,9 @@
   .pend-empty{font-size:12.5px;color:var(--ink-soft);margin-top:10px}
   .footnote{font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:18px;line-height:1.5}
   .hidden{display:none}
+  .dep-efdet{background:#EAF4EE;border-radius:9px;padding:9px 11px;margin:8px 0;font-size:12px;color:#1B5E3A}
+  .dep-efdet ul{margin:5px 0 0;padding-left:16px}
+  .dep-efdet li{margin:2px 0}
 </style>
 </head>
 <body>
@@ -311,12 +314,25 @@ function parseSait(buf){
     if(cat==='EF') g.totEF+=monto; else if(cat==='TD') g.totTD+=monto; else if(cat==='TC') g.totTC+=monto; else if(cat==='TR') g.totTR+=monto; else g.totOtro+=monto;
   });
 
-  cortes=Object.values(grupos).map(g=>({
-    lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
-    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[], pct_desc:20, efvo_facturado:0, ficha:null,
-    totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
-    total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
-  }));
+  cortes=Object.values(grupos).map(g=>{
+    // Una nota se factura completa (y su efectivo se deposita íntegro, sin descuento) cuando:
+    //  a) pagó una parte con tarjeta o transferencia — se detecta por la MISMA hora exacta, o
+    //  b) es un cliente identificado con RFC (nombre distinto de "mostrador").
+    const horasFacturadas = new Set(
+      g.ventas.filter(v=>(v.cat==='TD'||v.cat==='TC'||v.cat==='TR') && v.hora).map(v=>v.hora)
+    );
+    const efClientes = g.ventas.filter(v=>v.cat==='EF' && (
+      (v.hora && horasFacturadas.has(v.hora)) || !/MOSTRADOR/i.test(v.cliente)
+    ));
+    const efvoFact = Math.round(efClientes.reduce((s,v)=>s+v.monto,0)*100)/100;
+    return {
+      lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
+      ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[],
+      pct_desc:20, efvo_facturado:efvoFact, efClientes:efClientes, ficha:null,
+      totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
+      total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
+    };
+  });
   cortes.sort((a,b)=>a.fechaISO.localeCompare(b.fechaISO));
   render();
 }
@@ -408,6 +424,13 @@ function calcDeposito(c){
 function depositoEfectivo(c){
   const box=document.createElement('div'); box.className='deposito';
   const r=calcDeposito(c);
+  const efList = (c.efClientes||[]);
+  let efNota = '';
+  if(efList.length){
+    efNota = '<div class="dep-efdet">Efectivo que se deposita íntegro (nota facturada):<ul>'+
+      efList.map(v=>'<li>'+(v.hora||'')+' · '+v.cliente+' · <b>'+fmt(v.monto)+'</b></li>').join('')+
+      '</ul></div>';
+  }
   box.innerHTML=
     '<div class="dep-head">Depósito en efectivo</div>'+
     '<div class="dep-line"><span>Efectivo del corte</span><b class="num">'+fmt(c.totEF)+'</b></div>'+
@@ -415,6 +438,7 @@ function depositoEfectivo(c){
       '<label>% descuento<div class="dep-inp"><input type="number" class="i-pct" value="'+c.pct_desc+'" step="1" inputmode="decimal"><span>%</span></div></label>'+
       '<label>Efvo. facturado a cliente<div class="dep-inp"><span>$</span><input type="number" class="i-efvo" value="'+c.efvo_facturado+'" step="0.01" inputmode="decimal"></div></label>'+
     '</div>'+
+    efNota+
     '<div class="dep-result">'+
       '<div class="dep-dep"><span>A depositar</span><b class="num">'+fmt(r.dep)+'</b></div>'+
       '<div class="dep-exc"><span>Excedente</span><b class="num">'+fmt(r.exc)+'</b></div>'+
