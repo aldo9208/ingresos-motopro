@@ -634,10 +634,13 @@ function pintarEfectivo(){
   const depEspTot = cortes.reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
   const conDep = cortes.filter(c=>(Number(c.deposito_efectivo)||0)>0).length;
   const cuadran = cortes.filter(c=>c._depOk).length;
+  // Lo que ya se depositó y cuadró (persiste aunque no esté cargado el banco)
+  const depositadoOk = cortes.filter(c=>c._depOk).reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
   $('excAcum').textContent=fmt(excAcum);
   $('depEsp').textContent=fmt(depEspTot);
-  $('depReal').textContent= bbva ? fmt(bbva.depEf) : '—';
-  $('depCuadran').textContent = bbva ? (cuadran+'/'+conDep) : '—';
+  // Con banco cargado: total del estado de cuenta. Sin banco: lo que ya cuadró (guardado).
+  $('depReal').textContent = bbva ? fmt(bbva.depEf) : (cuadran>0 ? fmt(depositadoOk) : '—');
+  $('depCuadran').textContent = conDep>0 ? (cuadran+'/'+conDep) : '—';
 }
 
 function llenarDetalle(det,c,k){
