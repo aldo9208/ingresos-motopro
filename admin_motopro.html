@@ -609,7 +609,14 @@ function render(){
     const mid=document.createElement('div'); mid.className='corte-mid';
     let l2='EF '+fmt(c.efectivo)+' · TD '+fmt(td)+' · TC '+fmt(tc);
     if(Number(c.transferencia)>0) l2+=' · Tr '+fmt(c.transferencia);
-    mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+l2+'</div>';
+    const depEspC = Number(c.deposito_efectivo)||0;
+    let depBadge='';
+    if(depEspC>0){
+      if(c._depOk===true)      depBadge=' <span style="color:var(--green);font-weight:700">· depósito ✓</span>';
+      else if(c._depOk===false) depBadge=' <span style="color:#C2410C;font-weight:700">· depósito pendiente</span>';
+      else                      depBadge=' <span style="color:var(--ink-soft)">· depósito por verificar</span>';
+    }
+    mid.innerHTML='<div class="l1">'+(c.fecha||'')+' · Corte '+k+'</div><div class="l2">'+l2+depBadge+'</div>';
     const tot=document.createElement('div'); tot.className='corte-tot';
     let factInfo='';
     if(facturas && c._nTT>0){
