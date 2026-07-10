@@ -553,11 +553,14 @@ function conciliar(){
     }
 
     // --- Estado visual combinado ---
-    const faltaTarj = (td>0 && c._mTD!==true) || (tc>0 && c._mTC!==true);
-    const faltaDep  = depEsp>0 && c._depOk===false;   // solo "falta" si se evaluó y no cuadró
+    const tarjOk    = (td===0 || c._mTD===true) && (tc===0 || c._mTC===true);
+    const tarjFalta = (td>0 && c._mTD!==true) || (tc>0 && c._mTC!==true);
+    const depOk     = depEsp===0 || c._depOk===true;
+    const depPend   = depEsp>0 && c._depOk===false;   // con banco cargado, no cuadró
     if(td===0 && tc===0 && depEsp===0) c._estado='nt';
-    else if(!bbva && !tarjGuardado && !depGuardado) c._estado='wait';
-    else c._estado = (!faltaTarj && !faltaDep) ? 'ok' : 'pend';
+    else if(tarjOk && depOk) c._estado='ok';                       // todo verificado
+    else if(depPend || (bbva && tarjFalta)) c._estado='pend';      // algo no cuadró con el banco cargado
+    else c._estado='wait';                                         // falta verificar (sin banco)
   });
   if(nuevosTarj.length) persistirConciliados(nuevosTarj);
   if(nuevosDep.length) marcarDepBackend(nuevosDep);
