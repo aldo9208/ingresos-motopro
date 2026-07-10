@@ -547,12 +547,12 @@ function conciliar(){
       c._depOk = consumirDepositoFlex(depEsp, Number(c.efvo_facturado)||0);
       if(c._depOk){ DEPS_CONC.add(id); nuevosDep.push(id); }
     } else {
-      c._depOk = depEsp>0 ? false : null;
+      c._depOk = null;   // sin banco cargado: por verificar (no "pendiente")
     }
 
     // --- Estado visual combinado ---
     const faltaTarj = (td>0 && c._mTD!==true) || (tc>0 && c._mTC!==true);
-    const faltaDep  = depEsp>0 && !c._depOk;
+    const faltaDep  = depEsp>0 && c._depOk===false;   // solo "falta" si se evaluó y no cuadró
     if(td===0 && tc===0 && depEsp===0) c._estado='nt';
     else if(!bbva && !tarjGuardado && !depGuardado) c._estado='wait';
     else c._estado = (!faltaTarj && !faltaDep) ? 'ok' : 'pend';
@@ -576,6 +576,11 @@ function buscarDep(monto){
     if(dif <= TOL && dif < mejorDif){ mejor=x; mejorDif=dif; }
   });
   return mejor;
+}
+// ¿Existe un depósito de ese monto en el banco? (para diagnóstico, ignora si ya está usado)
+function hayDepEnBanco(monto){
+  if(!bbva) return false;
+  return bbva.depositos.some(x=>Math.abs(Number(x.monto)-Number(monto))<=0.10);
 }
 function consumirDeposito(monto){
   // El depósito real = monto de la factura, difiere por centavos del cálculo (toleramos 0.10).
@@ -680,7 +685,16 @@ function llenarDetalle(det,c,k){
   const depEsp = Number(c.deposito_efectivo)||0;
   if(depEsp>0){
     if(bbva){
-      html+='<div class="conc-line '+(c._depOk?'ok':'bad')+'">'+(c._depOk?'✓':'!')+' Depósito efectivo '+fmt(depEsp)+' — '+(c._depOk?'encontrado en BBVA':'no aparece como depósito')+'</div>';
+      if(c._depOk){
+        html+='<div class="conc-line ok">✓ Depósito efectivo '+fmt(depEsp)+' — encontrado en BBVA</div>';
+      } else {
+        const fact=Number(c.efvo_facturado)||0;
+        html+='<div class="conc-line bad">! Depósito efectivo '+fmt(depEsp)+' — no cuadró</div>';
+        if(fact>0.01){
+          const pub=Math.round((depEsp-fact)*100)/100;
+          html+='<div class="conc-line" style="background:var(--gray-soft);color:var(--ink-soft)">Se esperaba en 2 partes → Público '+fmt(pub)+': '+(hayDepEnBanco(pub)?'✓ está en el banco':'✗ no está')+' · Facturado '+fmt(fact)+': '+(hayDepEnBanco(fact)?'✓ está en el banco':'✗ no está')+'</div>';
+        }
+      }
     } else {
       html+='<div class="conc-line" style="background:var(--gray-soft);color:var(--ink-soft)">Depósito esperado '+fmt(depEsp)+' · excedente '+fmt(Number(c.excedente_efvo)||0)+'</div>';
     }
