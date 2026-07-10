@@ -544,7 +544,9 @@ function conciliar(){
     if(depGuardado){
       c._depOk = true;
     } else if(depEsp>0 && bbva){
-      c._depOk = consumirDepositoFlex(depEsp, Number(c.efvo_facturado)||0);
+      const parts = consumirDepositoFlex(depEsp, Number(c.efvo_facturado)||0);
+      c._depOk = !!parts;
+      c._depParts = parts;
       if(c._depOk){ DEPS_CONC.add(id); nuevosDep.push(id); }
     } else {
       c._depOk = null;   // sin banco cargado: por verificar (no "pendiente")
@@ -590,19 +592,23 @@ function consumirDeposito(monto){
 }
 // El depósito esperado puede llegar al banco en UN solo depósito, o partido en dos:
 // el público general (con descuento) y el efectivo facturado a cliente (íntegro).
+// Devuelve el arreglo de partes con que cuadró, o null si no cuadró.
 function consumirDepositoFlex(total, facturado){
-  if(!bbva) return false;
+  if(!bbva) return null;
   // 1) un solo depósito por el total
   const dTot = buscarDep(total);
-  if(dTot){ dTot.usado=true; return true; }
+  if(dTot){ dTot.usado=true; return [{etq:'Depósito efectivo', monto:dTot.monto}]; }
   // 2) dos depósitos: público (total − facturado) + facturado
   if(facturado > 0.01){
     const publico = Math.round((total - facturado)*100)/100;
     const dP = buscarDep(publico);
     const dF = buscarDep(facturado);
-    if(dP && dF && dP !== dF){ dP.usado=true; dF.usado=true; return true; }
+    if(dP && dF && dP !== dF){
+      dP.usado=true; dF.usado=true;
+      return [{etq:'Depósito público', monto:dP.monto}, {etq:'Depósito facturado', monto:dF.monto}];
+    }
   }
-  return false;
+  return null;
 }
 
 async function persistirConciliados(ids){
@@ -686,7 +692,11 @@ function llenarDetalle(det,c,k){
   if(depEsp>0){
     if(bbva){
       if(c._depOk){
-        html+='<div class="conc-line ok">✓ Depósito efectivo '+fmt(depEsp)+' — encontrado en BBVA</div>';
+        if(c._depParts && c._depParts.length>1){
+          c._depParts.forEach(p=> html+='<div class="conc-line ok">✓ '+p.etq+' '+fmt(p.monto)+' — encontrado en BBVA</div>');
+        } else {
+          html+='<div class="conc-line ok">✓ Depósito efectivo '+fmt(depEsp)+' — encontrado en BBVA</div>';
+        }
       } else {
         const fact=Number(c.efvo_facturado)||0;
         html+='<div class="conc-line bad">! Depósito efectivo '+fmt(depEsp)+' — no cuadró</div>';
@@ -696,7 +706,15 @@ function llenarDetalle(det,c,k){
         }
       }
     } else {
-      html+='<div class="conc-line" style="background:var(--gray-soft);color:var(--ink-soft)">Depósito esperado '+fmt(depEsp)+' · excedente '+fmt(Number(c.excedente_efvo)||0)+'</div>';
+      // Sin banco cargado: si ya está conciliado y hubo efvo facturado, mostramos las 2 partes
+      const fact=Number(c.efvo_facturado)||0;
+      if(c._depOk && fact>0.01){
+        const pub=Math.round((depEsp-fact)*100)/100;
+        html+='<div class="conc-line ok">✓ Depósito público '+fmt(pub)+' — depositado</div>';
+        html+='<div class="conc-line ok">✓ Depósito facturado '+fmt(fact)+' — depositado</div>';
+      } else {
+        html+='<div class="conc-line" style="background:var(--gray-soft);color:var(--ink-soft)">Depósito esperado '+fmt(depEsp)+' · excedente '+fmt(Number(c.excedente_efvo)||0)+'</div>';
+      }
     }
   }
   const ventas = (ventasPorCorte[k]||[]).filter(v=>v.tipo==='TD'||v.tipo==='TC'||v.tipo==='TR');
