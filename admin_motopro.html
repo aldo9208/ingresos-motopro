@@ -544,7 +544,7 @@ function conciliar(){
     if(depGuardado){
       c._depOk = true;
     } else if(depEsp>0 && bbva){
-      c._depOk = consumirDeposito(depEsp);
+      c._depOk = consumirDepositoFlex(depEsp, Number(c.efvo_facturado)||0);
       if(c._depOk){ DEPS_CONC.add(id); nuevosDep.push(id); }
     } else {
       c._depOk = depEsp>0 ? false : null;
@@ -566,11 +566,8 @@ function marcarDepBackend(ids){
   catch(err){ console.error('No se pudo guardar el depósito conciliado:',err); }
 }
 
-function consumirDeposito(monto){
-  if(!bbva) return false;
-  // El depósito real = monto de la factura global, que difiere del cálculo
-  // teórico por el redondeo de la factura. Toleramos esa diferencia y
-  // elegimos el depósito no usado más cercano al esperado.
+function buscarDep(monto){
+  if(!bbva) return null;
   const TOL = 0.10;
   let mejor=null, mejorDif=Infinity;
   bbva.depositos.forEach(x=>{
@@ -578,7 +575,28 @@ function consumirDeposito(monto){
     const dif = Math.abs(Number(x.monto) - Number(monto));
     if(dif <= TOL && dif < mejorDif){ mejor=x; mejorDif=dif; }
   });
-  if(mejor){ mejor.usado=true; return true; }
+  return mejor;
+}
+function consumirDeposito(monto){
+  // El depósito real = monto de la factura, difiere por centavos del cálculo (toleramos 0.10).
+  const d = buscarDep(monto);
+  if(d){ d.usado=true; return true; }
+  return false;
+}
+// El depósito esperado puede llegar al banco en UN solo depósito, o partido en dos:
+// el público general (con descuento) y el efectivo facturado a cliente (íntegro).
+function consumirDepositoFlex(total, facturado){
+  if(!bbva) return false;
+  // 1) un solo depósito por el total
+  const dTot = buscarDep(total);
+  if(dTot){ dTot.usado=true; return true; }
+  // 2) dos depósitos: público (total − facturado) + facturado
+  if(facturado > 0.01){
+    const publico = Math.round((total - facturado)*100)/100;
+    const dP = buscarDep(publico);
+    const dF = buscarDep(facturado);
+    if(dP && dF && dP !== dF){ dP.usado=true; dF.usado=true; return true; }
+  }
   return false;
 }
 
@@ -682,12 +700,13 @@ function llenarDetalle(det,c,k){
       '</div>';
   });
   det.innerHTML=html;
-  if(c.ficha_deposito && !String(c.ficha_deposito).startsWith('ERROR')){
-    const fb=document.createElement('button'); fb.className='vsmall'; fb.style.marginTop='8px';
-    fb.textContent='🧾 Ver ficha de depósito';
-    fb.onclick=ev=>{ ev.stopPropagation(); verVoucher(c.ficha_deposito, fb); };
+  const fichasIds = String(c.ficha_deposito||'').split(',').map(s=>s.trim()).filter(s=>s && s.indexOf('ERROR')!==0);
+  fichasIds.forEach((fid,i)=>{
+    const fb=document.createElement('button'); fb.className='vsmall'; fb.style.marginTop='8px'; fb.style.marginRight='6px';
+    fb.textContent = fichasIds.length>1 ? ('🧾 Ver ficha '+(i+1)) : '🧾 Ver ficha de depósito';
+    fb.onclick=ev=>{ ev.stopPropagation(); verVoucher(fid, fb); };
     det.appendChild(fb);
-  }
+  });
   det.querySelectorAll('.vsmall[data-vid]').forEach(b=>b.onclick=ev=>{ ev.stopPropagation(); verVoucher(b.dataset.vid,b); });
 }
 
