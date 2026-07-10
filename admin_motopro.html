@@ -130,6 +130,14 @@
   .chip{border:1px solid var(--line);background:#FCFBF8;border-radius:16px;padding:5px 10px;font-size:11.5px;font-weight:600;cursor:pointer}
   .chip:hover{background:var(--amber-soft);border-color:var(--amber)}
   .rowG{display:flex;gap:9px;margin-top:6px}.rowG .btn{flex:1;text-align:center;justify-content:center}
+  .mes-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+  .mes-tab{border:1px solid var(--line);background:#fff;color:var(--ink-soft);font-weight:700;font-size:12.5px;padding:7px 13px;border-radius:20px;cursor:pointer;font-family:inherit}
+  .mes-tab:hover{background:var(--gray-soft)}
+  .mes-tab.on{background:var(--ink);color:#fff;border-color:transparent}
+  .bolsa-toggle{border:none;background:none;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--amber);cursor:pointer;display:flex;align-items:center;gap:6px;padding:0}
+  .bolsa-toggle .chev{transition:.2s;display:inline-block;font-size:15px;color:var(--ink-soft)}
+  .bolsa-toggle.open .chev{transform:rotate(90deg)}
+  .bolsa-cnt{background:var(--gray-soft);color:var(--ink-soft);border-radius:10px;padding:1px 7px;font-size:10.5px;letter-spacing:0}
 </style>
 </head>
 <body>
@@ -215,10 +223,10 @@
       </div>
 
       <div class="bolsa-head">
-        <span class="bolsa-sub" style="margin:0">Movimientos de la bolsa</span>
+        <button class="bolsa-toggle" id="bolsaToggle"><span class="chev" id="bolsaChev">›</span> Movimientos de la bolsa <span id="bolsaCount" class="bolsa-cnt"></span></button>
         <button class="btn sm" id="btnGasto">+ Registrar gasto</button>
       </div>
-      <div id="bolsaMovs"><div class="loading">Cargando bolsa…</div></div>
+      <div id="bolsaMovs" class="hidden"><div class="loading">Cargando bolsa…</div></div>
     </div>
   </section>
 
@@ -228,6 +236,7 @@
         <div class="eyebrow" style="margin:0;flex:1">3 · Cortes registrados</div>
         <button class="btn" id="btnRefrescar">↻ Refrescar</button>
       </div>
+      <div id="mesTabs" class="mes-tabs"></div>
       <div id="listaCortes"><div class="loading">Cargando cortes…</div></div>
       <div class="estado-leyenda">
         <span><i class="dot" style="background:var(--green)"></i> Conciliado</span>
@@ -266,7 +275,7 @@ const API_URL = "https://script.google.com/macros/s/AKfycbz7WxtZQyAJabvuLeqprEOS
 // ============================================================
 
 const $ = id => document.getElementById(id);
-let cortes=[], ventasPorCorte={}, bbva=null, facturas=null, BOLSA=[], DEPS_CONC=new Set();
+let cortes=[], ventasPorCorte={}, bbva=null, facturas=null, BOLSA=[], DEPS_CONC=new Set(), mesSel=null;
 const fmt = n => '$' + (Number(n)||0).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const near = (a,b) => Math.abs(Number(a)-Number(b)) <= 0.01;
 
@@ -627,11 +636,21 @@ function consumir(tipo,monto){
 
 // ---- Render ----
 const ICON = {ok:'✓',pend:'!',nt:'—',wait:'•'};
+function mesDe(c){ return String(c.fecha||c.fechaISO||'').slice(0,7); }
+function nombreMes(m){
+  const N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const p=m.split('-'); return (N[parseInt(p[1],10)]||m)+' '+p[0];
+}
 function render(){
   const cont=$('listaCortes');
-  if(!cortes.length){ cont.innerHTML='<div class="loading">Aún no hay cortes guardados. Cuando la encargada guarde uno, aparece aquí.</div>'; return; }
+  if(!cortes.length){ cont.innerHTML='<div class="loading">Aún no hay cortes guardados. Cuando la encargada guarde uno, aparece aquí.</div>'; $('mesTabs').innerHTML=''; return; }
+  const meses=[...new Set(cortes.map(mesDe).filter(Boolean))].sort().reverse();
+  if(!mesSel || meses.indexOf(mesSel)<0) mesSel=meses[0];
+  $('mesTabs').innerHTML = meses.map(m=>'<button class="mes-tab'+(m===mesSel?' on':'')+'" data-m="'+m+'">'+nombreMes(m)+'</button>').join('');
+  $('mesTabs').querySelectorAll('.mes-tab').forEach(b=>b.onclick=()=>{ mesSel=b.dataset.m; render(); });
   cont.innerHTML='';
-  cortes.forEach(c=>{
+  const delMes = cortes.filter(c=>mesDe(c)===mesSel);
+  delMes.forEach(c=>{
     const k=String(c.id_corte);
     const td=Number(c.debito)||0, tc=Number(c.credito)||0;
     const wrap=document.createElement('div'); wrap.className='corte';
@@ -666,18 +685,18 @@ function render(){
     cont.appendChild(wrap);
   });
   pintarEfectivo();
+  renderBolsa();
 }
 
 function pintarEfectivo(){
-  const excAcum = cortes.reduce((s,c)=>s+(Number(c.excedente_efvo)||0),0);
-  const depEspTot = cortes.reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
-  const conDep = cortes.filter(c=>(Number(c.deposito_efectivo)||0)>0).length;
-  const cuadran = cortes.filter(c=>c._depOk).length;
-  // Lo que ya se depositó y cuadró (persiste aunque no esté cargado el banco)
-  const depositadoOk = cortes.filter(c=>c._depOk).reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
+  const delMes = mesSel ? cortes.filter(c=>mesDe(c)===mesSel) : cortes;
+  const excAcum = delMes.reduce((s,c)=>s+(Number(c.excedente_efvo)||0),0);
+  const depEspTot = delMes.reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
+  const conDep = delMes.filter(c=>(Number(c.deposito_efectivo)||0)>0).length;
+  const cuadran = delMes.filter(c=>c._depOk).length;
+  const depositadoOk = delMes.filter(c=>c._depOk).reduce((s,c)=>s+(Number(c.deposito_efectivo)||0),0);
   $('excAcum').textContent=fmt(excAcum);
   $('depEsp').textContent=fmt(depEspTot);
-  // Con banco cargado: total del estado de cuenta. Sin banco: lo que ya cuadró (guardado).
   $('depReal').textContent = bbva ? fmt(bbva.depEf) : (cuadran>0 ? fmt(depositadoOk) : '—');
   $('depCuadran').textContent = conDep>0 ? (cuadran+'/'+conDep) : '—';
 }
@@ -791,18 +810,21 @@ function renderBolsa(){
   const inicial = BOLSA.filter(m=>m.tipo==='inicial').reduce((s,m)=>s+(Number(m.importe)||0),0);
   const entradas = BOLSA.filter(m=>m.tipo==='entrada');
   const salidas  = BOLSA.filter(m=>m.tipo==='salida');
-  const totEnt = entradas.reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const totGas = salidas.reduce((s,m)=>s+(Number(m.importe)||0),0);
-  const saldo = inicial + totEnt - totGas;
-
+  // Saldo disponible GLOBAL (dinero real acumulado en la bolsa, no depende del mes)
+  const saldo = inicial + entradas.reduce((s,m)=>s+(Number(m.importe)||0),0) - salidas.reduce((s,m)=>s+(Number(m.importe)||0),0);
   $('bolsaSaldo').textContent = fmt(saldo);
-  $('bolsaEntrado').textContent = fmt(totEnt);
-  $('bolsaGastos').textContent = fmt(totGas);
   if(document.activeElement !== $('bolsaInicial')) $('bolsaInicial').value = inicial || 0;
 
-  // Excedentes por entregar: cortes con excedente que aún no tienen entrada en la bolsa
+  // Actividad del mes seleccionado
+  const enMes = m => !mesSel || String(m.fecha||m.creado||'').slice(0,7)===mesSel;
+  const totEnt = entradas.filter(enMes).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  const totGas = salidas.filter(enMes).reduce((s,m)=>s+(Number(m.importe)||0),0);
+  $('bolsaEntrado').textContent = fmt(totEnt);
+  $('bolsaGastos').textContent = fmt(totGas);
+
+  // Excedentes por entregar (del mes seleccionado)
   const yaEntregados = new Set(entradas.map(m=>String(m.ref_corte)));
-  const porEntregar = cortes.filter(c=>(Number(c.excedente_efvo)||0) > 0 && !yaEntregados.has(String(c.id_corte)));
+  const porEntregar = cortes.filter(c=>(Number(c.excedente_efvo)||0) > 0 && !yaEntregados.has(String(c.id_corte)) && (!mesSel || mesDe(c)===mesSel));
   if(porEntregar.length){
     $('porEntregarWrap').classList.remove('hidden');
     $('porEntregar').innerHTML = porEntregar.map(c=>
@@ -816,11 +838,12 @@ function renderBolsa(){
     $('porEntregar').innerHTML='';
   }
 
-  // Movimientos de la bolsa (entradas + salidas), recientes primero
-  const movs = BOLSA.filter(m=>m.tipo!=='inicial')
+  // Movimientos de la bolsa del mes (entradas + salidas), recientes primero
+  const movs = BOLSA.filter(m=>m.tipo!=='inicial' && enMes(m))
     .sort((a,b)=> String(b.fecha||b.creado).localeCompare(String(a.fecha||a.creado)));
+  $('bolsaCount').textContent = movs.length ? movs.length : '';
   if(!movs.length){
-    $('bolsaMovs').innerHTML='<div class="loading">Aún no hay movimientos. Marca un excedente como entregado o registra un gasto.</div>';
+    $('bolsaMovs').innerHTML='<div class="loading">Sin movimientos en este mes.</div>';
   } else {
     $('bolsaMovs').innerHTML = movs.map(m=>{
       const inn = m.tipo==='entrada';
@@ -867,6 +890,10 @@ $('bolsaInicial').addEventListener('input', ()=>{
 
 // Modal registrar gasto
 $('gChips').innerHTML = CONCEPTOS.map(c=>'<span class="chip" onclick="document.getElementById(\'gConcepto\').value=this.textContent">'+c+'</span>').join('');
+$('bolsaToggle').onclick=()=>{
+  const nowHidden = $('bolsaMovs').classList.toggle('hidden');
+  $('bolsaToggle').classList.toggle('open', !nowHidden);
+};
 $('btnGasto').onclick = ()=>{
   $('gConcepto').value=''; $('gImporte').value='';
   $('gFecha').value = new Date().toISOString().slice(0,10);
