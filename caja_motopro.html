@@ -60,6 +60,7 @@
   .tag{flex:0 0 auto;width:38px;height:38px;border-radius:8px;display:grid;place-items:center;font-size:11px;font-weight:800}
   .tag.tc{background:var(--amber-soft);color:var(--amber)}
   .tag.td{background:var(--blue-soft);color:var(--blue)}
+  .tag.tr{background:#EEE9F6;color:#6A4BA8}
   .venta .info{flex:1;min-width:0}
   .venta .monto{font-weight:700;font-size:15px}
   .venta .meta{font-size:11.5px;color:var(--ink-soft)}
@@ -316,7 +317,8 @@ function parseSait(buf){
 
   cortes=Object.values(grupos).map(g=>({
     lote:g.lote, fecha:serialToFecha(g.fechaRaw), fechaISO:fechaISO(g.fechaRaw),
-    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'), extras:[],
+    ventas:g.ventas, tarjeta:g.ventas.filter(v=>v.cat==='TC'||v.cat==='TD'),
+    transf:g.ventas.filter(v=>v.cat==='TR'), extras:[],
     pct_desc:20, efvo_facturado:0, ficha:null, fichas:[],
     totEF:g.totEF,totTD:g.totTD,totTC:g.totTC,totTR:g.totTR,totOtro:g.totOtro,
     total:g.totEF+g.totTD+g.totTC+g.totTR+g.totOtro
@@ -376,6 +378,12 @@ function llenarDet(det,c){
   if(c.tarjeta.length>0) c.tarjeta.forEach(v=>det.appendChild(ventaRow(v,c)));
   else det.innerHTML+='<div class="empty">Sin ventas con tarjeta en SAIT.</div>';
   det.appendChild(cotejoVouchers(c,det));
+  if(c.transf && c.transf.length){
+    const th=document.createElement('div'); th.className='cot-head'; th.style.marginTop='14px';
+    th.textContent='Comprobantes de transferencia';
+    det.appendChild(th);
+    c.transf.forEach(v=>det.appendChild(ventaRow(v,c)));
+  }
   det.appendChild(depositoEfectivo(c));
   det.appendChild(fichaDeposito(c));
 }
@@ -475,16 +483,17 @@ function pickVoucherExtra(c){
 
 function ventaRow(v,c){
   const row=document.createElement('div'); row.className='venta';
-  const tg=document.createElement('div'); tg.className='tag '+(v.cat==='TC'?'tc':'td'); tg.textContent=v.cat;
+  const esTR = v.cat==='TR';
+  const tg=document.createElement('div'); tg.className='tag '+(v.cat==='TC'?'tc':(esTR?'tr':'td')); tg.textContent=v.cat;
   row.appendChild(tg);
   const info=document.createElement('div'); info.className='info';
-  info.innerHTML='<div class="monto num">'+fmt(v.monto)+'</div><div class="meta">#'+v.folio+' · '+v.hora+'</div>';
+  info.innerHTML='<div class="monto num">'+fmt(v.monto)+'</div><div class="meta">#'+v.folio+' · '+v.hora+' · '+(v.cliente||'')+'</div>';
   row.appendChild(info);
   if(v.voucher){
     const img=document.createElement('img'); img.className='thumb'; img.src=v.voucher; img.title='Tocar para reemplazar';
     img.onclick=ev=>{ev.stopPropagation(); pickVoucher(v);}; row.appendChild(img);
   } else {
-    const btn=document.createElement('button'); btn.className='vbtn'; btn.innerHTML='📷 Voucher';
+    const btn=document.createElement('button'); btn.className='vbtn'; btn.innerHTML = esTR ? '📷 Comprobante' : '📷 Voucher';
     btn.onclick=ev=>{ev.stopPropagation(); pickVoucher(v);}; row.appendChild(btn);
   }
   return row;
