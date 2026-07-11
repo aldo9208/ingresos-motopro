@@ -138,6 +138,9 @@
   .bolsa-toggle .chev{transition:.2s;display:inline-block;font-size:15px;color:var(--ink-soft)}
   .bolsa-toggle.open .chev{transform:rotate(90deg)}
   .bolsa-cnt{background:var(--gray-soft);color:var(--ink-soft);border-radius:10px;padding:1px 7px;font-size:10.5px;letter-spacing:0}
+  .g-foto{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:#FCFBF8}
+  .g-foto img{width:44px;height:44px;object-fit:cover;border-radius:7px}
+  .g-foto span{flex:1;font-size:12.5px;font-weight:600;color:var(--green)}
 </style>
 </head>
 <body>
@@ -261,6 +264,10 @@
     <div class="fldG row2">
       <div><label>Importe</label><div class="bolsa-inp"><span>$</span><input id="gImporte" type="number" step="0.01" inputmode="decimal" placeholder="0.00"></div></div>
       <div><label>Fecha</label><input id="gFecha" type="date"></div>
+    </div>
+    <div class="fldG">
+      <label>Comprobante (opcional)</label>
+      <div id="gFotoBox"><button class="btn sm" id="gFotoBtn">📷 Tomar foto del comprobante</button></div>
     </div>
     <div class="rowG">
       <button class="btn" id="gCancel">Cancelar</button>
@@ -848,10 +855,13 @@ function renderBolsa(){
     $('bolsaMovs').innerHTML = movs.map(m=>{
       const inn = m.tipo==='entrada';
       const fecha = (m.fecha||'').toString().slice(0,10);
+      const verFoto = (m.foto && String(m.foto).indexOf('ERROR')!==0)
+        ? '<button class="vsmall" style="margin-right:6px" onclick="verVoucher(\''+String(m.foto).replace(/'/g,"")+'\',this)">📷</button>' : '';
       return '<div class="bm-row">'+
         '<div class="bm-mid"><div class="l1">'+(inn?'Excedente entregado':(m.concepto||'Gasto'))+'</div>'+
         '<div class="l2">'+fecha+(inn&&m.ref_corte?(' · corte '+m.ref_corte):'')+'</div></div>'+
         '<div class="bm-amt '+(inn?'in':'out')+'">'+(inn?'+':'−')+fmt(m.importe)+'</div>'+
+        verFoto+
         '<button class="bm-del" title="Borrar" onclick="borrarMov(\''+String(m.id).replace(/'/g,"")+'\')">✕</button>'+
       '</div>';
     }).join('');
@@ -890,6 +900,42 @@ $('bolsaInicial').addEventListener('input', ()=>{
 
 // Modal registrar gasto
 $('gChips').innerHTML = CONCEPTOS.map(c=>'<span class="chip" onclick="document.getElementById(\'gConcepto\').value=this.textContent">'+c+'</span>').join('');
+// Comprime la foto del comprobante antes de subirla (~200KB)
+function comprimirFoto(file, cb){
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.width,h=img.height; const max=1280;
+      if(w>h && w>max){ h=Math.round(h*max/w); w=max; }
+      else if(h>=w && h>max){ w=Math.round(w*max/h); h=max; }
+      const c=document.createElement('canvas'); c.width=w; c.height=h;
+      c.getContext('2d').drawImage(img,0,0,w,h);
+      let q=0.7,out=c.toDataURL('image/jpeg',q);
+      while(out.length>270000 && q>0.4){ q-=0.1; out=c.toDataURL('image/jpeg',q); }
+      cb(out);
+    };
+    img.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+let gFoto=null;
+function pintarFotoGasto(){
+  const box=$('gFotoBox');
+  if(gFoto){
+    box.innerHTML='<div class="g-foto"><img src="'+gFoto+'"><span>Comprobante listo</span><button class="bm-del" id="gFotoX">✕</button></div>';
+    $('gFotoX').onclick=()=>{ gFoto=null; pintarFotoGasto(); };
+  } else {
+    box.innerHTML='<button class="btn sm" id="gFotoBtn">📷 Tomar foto del comprobante</button>';
+    $('gFotoBtn').onclick=()=>{
+      const inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.capture='environment';
+      inp.onchange=e=>{ const f=e.target.files[0]; if(!f) return; comprimirFoto(f, d=>{ gFoto=d; pintarFotoGasto(); }); };
+      inp.click();
+    };
+  }
+}
+
 $('bolsaToggle').onclick=()=>{
   const nowHidden = $('bolsaMovs').classList.toggle('hidden');
   $('bolsaToggle').classList.toggle('open', !nowHidden);
@@ -897,6 +943,7 @@ $('bolsaToggle').onclick=()=>{
 $('btnGasto').onclick = ()=>{
   $('gConcepto').value=''; $('gImporte').value='';
   $('gFecha').value = new Date().toISOString().slice(0,10);
+  gFoto=null; pintarFotoGasto();
   $('modalGasto').classList.add('open');
 };
 $('gCancel').onclick = ()=>$('modalGasto').classList.remove('open');
@@ -906,9 +953,15 @@ $('gGuardar').onclick = async ()=>{
   if(!concepto){ alert('Escribe el concepto del gasto.'); return; }
   if(!importe){ alert('Escribe el importe.'); return; }
   const mov = { id:'B'+Date.now(), fecha, tipo:'salida', concepto, importe, ref_corte:'' };
+  const payload = Object.assign({}, mov, {foto_b64:gFoto||''});
   BOLSA.push(mov); renderBolsa();
   $('modalGasto').classList.remove('open');
-  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_mov',mov})}); }catch(e){}
+  gFoto=null;
+  try{
+    const res = await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'bolsa_mov',mov:payload})});
+    const d = await res.json();
+    if(d && d.ok && d.foto){ const g=BOLSA.find(x=>x.id===mov.id); if(g){ g.foto=d.foto; renderBolsa(); } }
+  }catch(e){}
 };
 
 cargarCortes();
