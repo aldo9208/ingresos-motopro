@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contabilidad Flores · Ranchos + Moto Pro</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+body{background:#f4f5f7;color:#1c2430;padding:14px;max-width:1250px;margin:auto}
+h1{font-size:1.25rem;margin-bottom:2px}
+.sub{color:#667;font-size:.82rem;margin-bottom:12px}
+.card{background:#fff;border:1px solid #e3e6ea;border-radius:10px;padding:14px;margin-bottom:14px}
+.drop{border:2px dashed #b9c2cc;border-radius:10px;padding:22px;text-align:center;color:#556;cursor:pointer;transition:.15s}
+.drop.on{border-color:#0a7d4f;background:#eefaf4}
+button{border:0;border-radius:8px;padding:8px 14px;font-size:.85rem;cursor:pointer;background:#12314f;color:#fff}
+button.sec{background:#e8ecf1;color:#123}
+button.mini{padding:3px 8px;font-size:.72rem}
+table{width:100%;border-collapse:collapse;font-size:.8rem}
+th{text-align:left;padding:6px 6px;background:#f0f2f5;position:sticky;top:0;font-size:.72rem;text-transform:uppercase;color:#556}
+td{padding:5px 6px;border-top:1px solid #eef0f3;vertical-align:top}
+tr.rev td{background:#fff8e8}
+tr.per td{background:#f6f0fa}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.chip{display:inline-block;padding:1px 7px;border-radius:20px;font-size:.66rem;font-weight:600}
+.c-cheques{background:#dcecff;color:#134a8e}.c-banamex{background:#ffe3e8;color:#8e1330}
+.c-tdcNeg{background:#e7e0ff;color:#3d2b8e}.c-tdcOro{background:#fff0d6;color:#8a5a00}
+.ref{color:#889;font-size:.7rem}
+select,input[type=text]{border:1px solid #ccd3da;border-radius:6px;padding:4px 6px;font-size:.78rem;background:#fff;max-width:170px}
+.tot{display:flex;gap:10px;flex-wrap:wrap}
+.tot div{background:#f7f8fa;border:1px solid #e6e9ed;border-radius:8px;padding:8px 12px;font-size:.78rem;min-width:150px}
+.tot b{display:block;font-size:.95rem}
+.pos{color:#0a7d4f}.neg{color:#b3261e}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+#modal{position:fixed;inset:0;background:rgba(10,20,30,.45);display:none;align-items:center;justify-content:center;z-index:9}
+#modal .box{background:#fff;border-radius:12px;padding:18px;width:340px}
+#modal label{display:block;font-size:.72rem;color:#556;margin:8px 0 2px}
+#modal input,#modal select{width:100%;max-width:none}
+.hint{font-size:.72rem;color:#778;margin-top:6px}
+#cuentasTxt{width:100%;height:180px;font-family:monospace;font-size:.75rem;border:1px solid #ccd3da;border-radius:8px;padding:8px}
+.warn{background:#fff3cd;border:1px solid #ffe08a;border-radius:8px;padding:8px 12px;font-size:.78rem;margin-bottom:10px;display:none}
+</style>
+</head>
+<body>
+<h1>💼 Contabilidad Flores Salame</h1>
+<div class="sub">🍋 Ranchos · 🏍️ Moto Pro · 👤 Personal — RFC FOSA9208236K5 · Lee BBVA cheques, Banamex y tarjetas de crédito</div>
+
+<div class="card">
+  <div class="drop" id="drop">📄 Arrastra aquí los PDF de tus estados de cuenta (puedes soltar varios a la vez)<br><span style="font-size:.75rem">o haz clic para elegirlos</span></div>
+  <input type="file" id="fileInp" accept="application/pdf" multiple style="display:none">
+  <div id="status" class="hint"></div>
+</div>
+
+<div class="card">
+  <div class="tot" id="totales"></div>
+</div>
+
+<div class="warn" id="warnRev"></div>
+
+<div class="card">
+  <div class="bar">
+    <select id="fEmp"><option value="">Todas las empresas</option><option value="rancho">🍋 Rancho</option><option value="motopro">🏍️ Moto Pro</option><option value="personal">👤 Personal</option></select>
+    <select id="fEstado"><option value="">Todos</option><option value="revisar">⚠️ Por revisar</option><option value="ok">✅ Clasificados</option></select>
+    <select id="fOrigen"><option value="">Todas las cuentas</option><option value="cheques">BBVA Cheques</option><option value="banamex">Banamex</option><option value="tdcNeg">TDC Negocios</option><option value="tdcOro">TDC Oro</option></select>
+    <span style="flex:1"></span>
+    <button class="sec" id="btnCuentas">Catálogo de cuentas</button>
+    <button id="btnExportar">⬇️ Exportar pólizas COI (XLSX)</button>
+  </div>
+  <div style="max-height:60vh;overflow:auto">
+  <table>
+    <thead><tr><th>Fecha</th><th>Cuenta banco</th><th>Descripción</th><th class="num">Cargo</th><th class="num">Abono</th><th>Empresa</th><th>Tipo</th><th>Cuenta contable</th><th>IVA</th><th></th></tr></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  </div>
+</div>
+
+<div class="card" id="cardCuentas" style="display:none">
+  <b style="font-size:.85rem">Catálogo de cuentas (clave = nombre, una por línea)</b>
+  <textarea id="cuentasTxt"></textarea>
+  <div class="bar" style="margin-top:8px"><button id="btnGuardarCuentas">Guardar cuentas</button></div>
+</div>
+
+<div id="modal"><div class="box">
+  <b>⚡ Crear regla de clasificación</b>
+  <label>Si la descripción contiene:</label><input type="text" id="rTexto">
+  <label>Empresa</label><select id="rEmp"><option value="rancho">🍋 Rancho</option><option value="motopro">🏍️ Moto Pro</option><option value="personal">👤 Personal</option></select>
+  <label>Tipo</label><select id="rTipo"><option value="gasto">Gasto</option><option value="ingreso">Ingreso</option><option value="traspaso">Traspaso</option><option value="personal">Personal</option><option value="omitir">Omitir</option></select>
+  <label>Cuenta contable</label><select id="rCuenta"></select>
+  <label style="display:flex;gap:6px;align-items:center;margin-top:10px"><input type="checkbox" id="rIva" style="width:auto"> Desglosar IVA 16%</label>
+  <div class="hint">La regla se guarda en tu backend y se aplicará automáticamente a todos los movimientos futuros que contengan ese texto.</div>
+  <div class="bar" style="margin-top:12px"><button id="rGuardar">Guardar</button><button class="sec" id="rCancelar">Cancelar</button></div>
+</div></div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+let API_URL='__APPS_SCRIPT_URL__';
+async function resolverAPI(){
+  if(!API_URL.includes('__')) return;
+  try{
+    const t=await (await fetch('contabilidad_motopro.html')).text();
+    const m=t.match(/https:\/\/script\.google\.com\/macros\/s\/[^"'`]+\/exec/);
+    if(m) API_URL=m[0];
+  }catch(e){}
+}
+const $=id=>document.getElementById(id);
+const MES={ENE:1,FEB:2,MAR:3,ABR:4,MAY:5,JUN:6,JUL:7,AGO:8,SEP:9,OCT:10,NOV:11,DIC:12,JAN:1,APR:4,AUG:8,DEC:12};
+const BANCO={cheques:'1120-001-0001',banamex:'1120-001-0002',tdcNeg:'2115-001',tdcOro:'2115-002'};
+const NOM_ORIGEN={cheques:'BBVA Cheques',banamex:'Banamex',tdcNeg:'TDC Negocios',tdcOro:'TDC Oro'};
+const CUENTAS_DEF={
+'1110-001':'Caja / Efectivo','1120-001-0001':'Banco BBVA','1120-001-0002':'Banco Banamex',
+'1191-001-0002':'IVA acreditable pagado (PUE)','2110-002':'Proveedores',
+'2115-001':'Acreedor TDC BBVA Negocios','2115-002':'Acreedor TDC Afinidad',
+'2130-001':'Impuestos por pagar (SAT/IMSS)','3900-001':'Retiros personales',
+'4100-001':'Ventas Rancho (limón)','4200-001':'Ventas Moto Pro',
+'5000-001':'Compras de mercancía Moto Pro','6000-001':'Sueldos y salarios',
+'6000-010':'Renta de local','6000-011':'Servicios (teléfono/luz)','6000-012':'Insumos agrícolas',
+'6000-013':'Riego','6000-014':'Limpieza y papelería','6000-015':'Viáticos',
+'6000-016':'Ferretería y mantenimiento','6000-020':'Comisiones bancarias',
+'6000-021-0001':'Combustible','6000-022':'Intereses financieros','6000-030-0001':'Gastos generales'};
+const HEUR=[
+[/LIMONES/, {e:'rancho',t:'ingreso',c:'4100-001'}],
+[/RIEGO|VAZQUEZ HERNANDEZ/, {e:'rancho',t:'gasto',c:'6000-013'}],
+[/AGROQUIMICO/, {e:'rancho',t:'gasto',c:'6000-012'}],
+[/GASOLINA|BARDA BLANCA|GASADER|DIESEL/, {e:'rancho',t:'gasto',c:'6000-021-0001'}],
+[/INSUMOS AGRICO/, {e:'rancho',t:'gasto',c:'6000-012'}],
+[/BOMBA/, {e:'rancho',t:'gasto',c:'6000-016'}],
+[/FERR|CATORSA/, {e:'rancho',t:'gasto',c:'6000-016'}],
+[/VIATICOS/, {e:'rancho',t:'gasto',c:'6000-015'}],
+[/MOTO ?COOL|MOTO REPUESTOS|MRM|IMPORTADOR/, {e:'motopro',t:'gasto',c:'5000-001'}],
+[/RENTA MOTO/, {e:'motopro',t:'gasto',c:'6000-010'}],
+[/VENTAS (DEBITO|CREDITO)/, {e:'motopro',t:'ingreso',c:'4200-001'}],
+[/DEPOSITO EN EFECTIVO/, {e:'motopro',t:'ingreso',c:'4200-001'}],
+[/TASA DE DES|COMISION|SERV BANCA|SERV BCA|ADMINISTRACION RENTA|ADM\.TAR|ADMINISTRACION TARJ/, {e:'motopro',t:'gasto',c:'6000-020'}],
+[/IVA TASA|IVA COM/, {e:'motopro',t:'gasto',c:'1191-001-0002'}],
+[/PAGO DE NOMINA/, {e:'rancho',t:'gasto',c:'6000-001'}],
+[/SIPARE|IMSS|INF\/AFORE|^SAT | SAT$|GUIA:/, {e:'rancho',t:'gasto',c:'2130-001'}],
+[/TELMEX|TELEFON|CFE /, {e:'motopro',t:'gasto',c:'6000-011'}],
+[/LIMPIEZA|PAPELERIA|BONILLA/, {e:'motopro',t:'gasto',c:'6000-014'}],
+[/PAGO TARJETA DE CREDITO/, {e:'personal',t:'traspaso',c:'2115-001'}],
+[/INTERN\.PAGO TDC/, {e:'personal',t:'omitir',c:''}],
+[/RETIRO CAJERO/, {e:'rancho',t:'traspaso',c:'1110-001'}],
+[/CHEQUE PAGADO/, {e:'rancho',t:'traspaso',c:'1110-001'}],
+[/INTERES/, {e:'personal',t:'gasto',c:'6000-022'}],
+[/REST |POLLO MOYO|COMEDOR|MERPAGO|HOTEL|COSKITO|SUPER |F AHORRO|GRAN ESTRELLA|ANTHROPIC|CLAUDE|BURO DE CREDITO|RAIKER|ZTL|BPK/, {e:'personal',t:'personal',c:'3900-001'}]
+];
+let movs=[], reglas=[], cuentas={}, movRegla=null;
+
+function loadCuentas(){try{cuentas=JSON.parse(localStorage.getItem('cfCuentas'))||{...CUENTAS_DEF}}catch(e){cuentas={...CUENTAS_DEF}}}
+function saveCuentas(){localStorage.setItem('cfCuentas',JSON.stringify(cuentas))}
+function num(t){const v=parseFloat(String(t).replace(/[$,+\s]/g,''));return isNaN(v)?0:Math.abs(v)}
+function iso(y,m,d){return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0')}
+
+async function rowsDePagina(page){
+  const tc=await page.getTextContent();
+  const toks=tc.items.map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5]})).filter(t=>t.s);
+  toks.sort((a,b)=> b.y-a.y || a.x-b.x);
+  const rows=[]; let cur=null;
+  for(const t of toks){
+    if(!cur || Math.abs(cur.y-t.y)>3){cur={y:t.y,toks:[t]};rows.push(cur)} else cur.toks.push(t);
+  }
+  return rows;
+}
+function headerX(rows,labels){
+  for(const r of rows){
+    const found={}; let n=0;
+    for(const t of r.toks) for(const L of labels) if(t.s.toUpperCase().includes(L)){found[L]=t.x;n++}
+    if(n>=labels.length) return found;
+  }
+  return null;
+}
+function detecta(txt){
+  const T=txt.toUpperCase();
+  if(T.includes('LIBRETON')) return 'cheques';
+  if(T.includes('BANAMEX') && T.includes('MICUENTA')) return 'banamex';
+  if(T.includes('T NEGOC')||T.includes('LCDIGITAL')) return 'tdcNeg';
+  if(T.includes('NO A MESES')||T.includes('AFINIDAD')) return 'tdcOro';
+  return null;
+}
+
+function parseCheques(rows,txt){
+  const my=txt.match(/AL\s+(\d{2})\/(\d{2})\/(\d{4})/); const year=my?+my[3]:new Date().getFullYear();
+  const hx=headerX(rows,['CARGOS','ABONOS','SALDO']); if(!hx) return [];
+  const b1=(hx['CARGOS']+hx['ABONOS'])/2, b2=(hx['ABONOS']+hx['SALDO'])/2;
+  const out=[]; let m=null;
+  for(const r of rows){
+    const t0=r.toks[0].s, esFecha=/^\d{2}\/[A-Z]{3}$/.test(t0) && r.toks[1] && /^\d{2}\/[A-Z]{3}$/.test(r.toks[1].s);
+    if(esFecha){
+      if(m) out.push(m);
+      const dd=+t0.slice(0,2), mm=MES[t0.slice(3)]||1;
+      const desc=[],nums=[];
+      for(const t of r.toks.slice(2)){
+        if(/^-?[\d,]+\.\d{2}$/.test(t.s)) nums.push(t); else if(t.x<hx['CARGOS']-8) desc.push(t.s);
+      }
+      m={f:iso(year,mm,dd),origen:'cheques',d:desc.join(' '),ref:'',cargo:0,abono:0};
+      for(const n of nums){ if(n.x<b1-30) m.cargo=num(n.s); else if(n.x<b2-20) m.abono=num(n.s); }
+      if(/SALDO ANTERIOR/.test(m.d)) m=null;
+    } else if(m){
+      const linea=r.toks.filter(t=>t.x<hx['CARGOS']-8).map(t=>t.s).join(' ');
+      if(/TOTAL DE MOVIMIENTOS|TOTAL IMPORTE|GLOSARIO|CUADRO RESUMEN/i.test(linea)){out.push(m);m=null;continue}
+      if(linea) m.ref=(m.ref+' '+linea).trim().slice(0,140);
+      for(const t of r.toks) if(/^-?[\d,]+\.\d{2}$/.test(t.s)){ if(t.x<b1-30&&!m.cargo) m.cargo=num(t.s); else if(t.x>=b1-30&&t.x<b2-20&&!m.abono) m.abono=num(t.s); }
+    }
+  }
+  if(m) out.push(m);
+  return out.filter(x=>x.cargo||x.abono);
+}
+function parseBanamex(rows,txt){
+  const my=txt.match(/al\s+\d+\s+de\s+(\w+)\s+del?\s+(\d{4})/i);
+  const year=my?+my[2]:new Date().getFullYear();
+  const hx=headerX(rows,['RETIROS','SALDO']); if(!hx) return [];
+  const hd=headerX(rows,['DEP'])||{DEP:(hx['RETIROS']+hx['SALDO'])/2};
+  const b1=(hx['RETIROS']+hd['DEP'])/2, b2=(hd['DEP']+hx['SALDO'])/2;
+  const out=[]; let m=null;
+  for(const r of rows){
+    const joined=r.toks.map(t=>t.s).join(' ');
+    const fm=joined.match(/^(\d{2})\s+([A-Z]{3})\b/);
+    if(fm){
+      if(m) out.push(m);
+      const resto=joined.replace(/^(\d{2})\s+([A-Z]{3})\s*/,'');
+      m={f:iso(year,MES[fm[2]]||1,+fm[1]),origen:'banamex',d:resto.replace(/-?[\d,]+\.\d{2}/g,'').trim(),ref:'',cargo:0,abono:0};
+      for(const t of r.toks) if(/^[\d,]+\.\d{2}$/.test(t.s)){ if(t.x<b1) m.cargo=num(t.s); else if(t.x<b2) m.abono=num(t.s); }
+      if(/SALDO ANTERIOR/.test(m.d)) m=null;
+    } else if(m){
+      if(/COMISIONES COBRADAS|GLOSARIO/i.test(joined)){out.push(m);m=null;continue}
+      const linea=r.toks.filter(t=>t.x<hx['RETIROS']-8).map(t=>t.s).join(' ');
+      if(linea) m.ref=(m.ref+' '+linea).trim().slice(0,140);
+      for(const t of r.toks) if(/^[\d,]+\.\d{2}$/.test(t.s)){ if(t.x<b1&&!m.cargo) m.cargo=num(t.s); else if(t.x>=b1&&t.x<b2&&!m.abono) m.abono=num(t.s); }
+    }
+  }
+  if(m) out.push(m);
+  return out.filter(x=>x.cargo||x.abono);
+}
+function parseTdcNeg(rows){
+  const out=[];
+  for(const r of rows){
+    const joined=r.toks.map(t=>t.s).join(' ');
+    const fm=joined.match(/^(\d{2})\/(\d{2})\/(\d{2})\s+\d{2}\/\d{2}\/\d{2}\s+(.+)/);
+    if(!fm) continue;
+    if(/Iva\s*:|Tasa Anual/i.test(joined)) continue;
+    const am=joined.match(/(-?)\s*\$\s*(-?[\d,]+\.\d{2})/);
+    if(!am) continue;
+    const neg=am[1]==='-'||am[2].startsWith('-');
+    const desc=fm[4].replace(/(-?)\s*\$\s*-?[\d,]+\.\d{2}.*/,'').replace(/\*{3,}\d*/g,'').trim();
+    out.push({f:iso(2000+ +fm[3],+fm[2],+fm[1]),origen:'tdcNeg',d:desc,ref:'',cargo:neg?0:num(am[2]),abono:neg?num(am[2]):0});
+  }
+  return out;
+}
+function parseTdcOro(rows){
+  const M={ene:1,feb:2,mar:3,abr:4,may:5,jun:6,jul:7,ago:8,sep:9,oct:10,nov:11,dic:12};
+  const out=[];
+  for(const r of rows){
+    const joined=r.toks.map(t=>t.s).join(' ');
+    const fm=joined.match(/^(\d{2})-([a-z]{3})-(\d{4})\s+\d{2}-[a-z]{3}-\d{4}\s+(.+)/i);
+    if(!fm) continue;
+    const am=joined.match(/([+-])\s*\$\s*([\d,]+\.\d{2})\s*$/);
+    if(!am) continue;
+    const desc=fm[4].replace(/([+-])\s*\$\s*[\d,]+\.\d{2}\s*$/,'').replace(/;.*Tarjeta Digital.*$/i,'').replace(/\*{3,}\d*/g,'').trim();
+    out.push({f:iso(+fm[3],M[fm[2].toLowerCase()]||1,+fm[1]),origen:'tdcOro',d:desc,ref:'',cargo:am[1]==='+'?num(am[2]):0,abono:am[1]==='-'?num(am[2]):0});
+  }
+  return out;
+}
+
+async function procesarArchivo(file){
+  const buf=await file.arrayBuffer();
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let allRows=[], txt='';
+  for(let p=1;p<=pdf.numPages;p++){
+    const rows=await rowsDePagina(await pdf.getPage(p));
+    allRows=allRows.concat(rows);
+    txt+=rows.map(r=>r.toks.map(t=>t.s).join(' ')).join('\n')+'\n';
+  }
+  const fmt=detecta(txt);
+  if(!fmt){ $('status').textContent+=' ⚠️ '+file.name+': formato no reconocido.'; return; }
+  let nuevos=[];
+  if(fmt==='cheques') nuevos=parseCheques(allRows,txt);
+  if(fmt==='banamex') nuevos=parseBanamex(allRows,txt);
+  if(fmt==='tdcNeg') nuevos=parseTdcNeg(allRows);
+  if(fmt==='tdcOro') nuevos=parseTdcOro(allRows);
+  for(const n of nuevos){ n.empresa='';n.cuenta='';n.tipo='';n.iva=false; movs.push(n); }
+  $('status').textContent+=' ✅ '+file.name+' ('+NOM_ORIGEN[fmt]+'): '+nuevos.length+' movimientos.';
+}
+
+function clasificar(){
+  for(const m of movs){
+    if(m.manual) continue;
+    const T=(m.d+' '+m.ref).toUpperCase();
+    let hit=null;
+    for(const rg of reglas){ if(rg.beneficiario && T.includes(String(rg.beneficiario).toUpperCase())){ hit={e:rg.empresa,t:rg.tipo||( m.abono?'ingreso':'gasto'),c:(rg.tipo==='ingreso'?rg.cuenta_abono:rg.cuenta_cargo)||rg.cuenta_cargo||rg.cuenta_abono,iva:rg.desglosa_iva==='si'||rg.desglosa_iva===true}; break; } }
+    if(!hit){ for(const [re,v] of HEUR){ if(re.test(T)){hit=v;break} } }
+    if(hit){ m.empresa=hit.e; m.tipo=hit.t; m.cuenta=hit.c||''; if(hit.iva!==undefined)m.iva=hit.iva; }
+    else { m.empresa=m.empresa||''; m.tipo='revisar'; }
+  }
+}
+
+function render(){
+  const fe=$('fEmp').value, fs=$('fEstado').value, fo=$('fOrigen').value;
+  movs.sort((a,b)=>a.f<b.f?-1:1);
+  const opts='<option value=""></option>'+Object.entries(cuentas).map(([k,v])=>`<option value="${k}">${k} ${v}</option>`).join('');
+  let html='';
+  movs.forEach((m,i)=>{
+    if(fe&&m.empresa!==fe)return; if(fo&&m.origen!==fo)return;
+    if(fs==='revisar'&&m.tipo!=='revisar')return; if(fs==='ok'&&m.tipo==='revisar')return;
+    const cls=m.tipo==='revisar'?'rev':(m.empresa==='personal'||m.tipo==='personal'?'per':'');
+    html+=`<tr class="${cls}">
+    <td>${m.f.slice(5)}</td>
+    <td><span class="chip c-${m.origen}">${NOM_ORIGEN[m.origen]}</span></td>
+    <td>${m.d}<div class="ref">${m.ref}</div></td>
+    <td class="num neg">${m.cargo?m.cargo.toLocaleString('es-MX',{minimumFractionDigits:2}):''}</td>
+    <td class="num pos">${m.abono?m.abono.toLocaleString('es-MX',{minimumFractionDigits:2}):''}</td>
+    <td><select onchange="setM(${i},'empresa',this.value)"><option value=""></option><option value="rancho"${m.empresa==='rancho'?' selected':''}>🍋 Rancho</option><option value="motopro"${m.empresa==='motopro'?' selected':''}>🏍️ Moto Pro</option><option value="personal"${m.empresa==='personal'?' selected':''}>👤 Personal</option></select></td>
+    <td><select onchange="setM(${i},'tipo',this.value)">${['revisar','gasto','ingreso','traspaso','personal','omitir'].map(t=>`<option value="${t}"${m.tipo===t?' selected':''}>${t}</option>`).join('')}</select></td>
+    <td><select onchange="setM(${i},'cuenta',this.value)">${opts.replace(`value="${m.cuenta}"`,`value="${m.cuenta}" selected`)}</select></td>
+    <td><input type="checkbox" ${m.iva?'checked':''} onchange="setM(${i},'iva',this.checked)"></td>
+    <td><button class="mini sec" onclick="abrirRegla(${i})">⚡</button></td>
+    </tr>`;
+  });
+  $('tbody').innerHTML=html;
+  const T={rancho:{i:0,g:0},motopro:{i:0,g:0},personal:{i:0,g:0}};
+  let rev=0;
+  for(const m of movs){
+    if(m.tipo==='revisar'){rev++;continue}
+    if(m.tipo==='omitir'||m.tipo==='traspaso')continue;
+    const e=T[m.empresa]; if(!e)continue;
+    if(m.tipo==='ingreso')e.i+=m.abono; else e.g+=(m.cargo||m.abono);
+  }
+  $('totales').innerHTML=`
+  <div>🍋 <b class="pos">+${T.rancho.i.toLocaleString('es-MX',{minimumFractionDigits:2})}</b> Ingresos rancho</div>
+  <div>🍋 <b class="neg">−${T.rancho.g.toLocaleString('es-MX',{minimumFractionDigits:2})}</b> Gastos rancho</div>
+  <div>🏍️ <b class="pos">+${T.motopro.i.toLocaleString('es-MX',{minimumFractionDigits:2})}</b> Ingresos Moto Pro</div>
+  <div>🏍️ <b class="neg">−${T.motopro.g.toLocaleString('es-MX',{minimumFractionDigits:2})}</b> Gastos Moto Pro</div>
+  <div>👤 <b class="neg">−${T.personal.g.toLocaleString('es-MX',{minimumFractionDigits:2})}</b> Personal</div>
+  <div>📋 <b>${movs.length}</b> movimientos leídos</div>`;
+  $('warnRev').style.display=rev?'block':'none';
+  $('warnRev').textContent='⚠️ '+rev+' movimientos por revisar. Clasifícalos antes de exportar (o se omitirán de la póliza).';
+}
+function setM(i,campo,val){ movs[i][campo]=val; movs[i].manual=true; render(); }
+
+function abrirRegla(i){
+  movRegla=movs[i];
+  $('rTexto').value=movRegla.d.split(/\s{2,}|\s/).slice(0,3).join(' ');
+  $('rEmp').value=movRegla.empresa||'rancho';
+  $('rTipo').value=movRegla.tipo==='revisar'?(movRegla.abono?'ingreso':'gasto'):movRegla.tipo;
+  $('rCuenta').innerHTML=Object.entries(cuentas).map(([k,v])=>`<option value="${k}">${k} ${v}</option>`).join('');
+  if(movRegla.cuenta)$('rCuenta').value=movRegla.cuenta;
+  $('rIva').checked=!!movRegla.iva;
+  $('modal').style.display='flex';
+}
+$('rCancelar').onclick=()=>$('modal').style.display='none';
+$('rGuardar').onclick=async()=>{
+  const rg={beneficiario:$('rTexto').value.trim(),empresa:$('rEmp').value,tipo:$('rTipo').value,
+    cuenta_cargo:$('rTipo').value==='ingreso'?BANCO[movRegla.origen]:$('rCuenta').value,
+    cuenta_abono:$('rTipo').value==='ingreso'?$('rCuenta').value:BANCO[movRegla.origen],
+    tipo_poliza:$('rTipo').value==='ingreso'?'Ig':($('rTipo').value==='gasto'&&movRegla.origen!=='cheques'&&movRegla.origen!=='banamex'?'Dr':'Eg'),
+    desglosa_iva:$('rIva').checked?'si':'no'};
+  reglas.push(rg);
+  $('modal').style.display='none';
+  clasificar(); render();
+  try{ await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'guardar_regla',...rg})}); }
+  catch(e){ alert('La regla se aplicó localmente pero no se pudo guardar en el backend: '+e.message); }
+};
+
+function polizasDeMovs(lista){
+  const rows=[['Tipo','Fecha','Concepto','Empresa','Cuenta','Cargo','Abono']];
+  for(const m of lista){
+    if(m.tipo==='revisar'||m.tipo==='omitir')continue;
+    const banco=BANCO[m.origen], monto=m.cargo||m.abono, con=(m.d+' '+m.ref).trim().slice(0,90);
+    const emp=m.empresa||'';
+    const esTDC=(m.origen==='tdcNeg'||m.origen==='tdcOro');
+    if(m.tipo==='ingreso'){
+      rows.push(['Ig',m.f,con,emp,banco,monto,'']);
+      rows.push(['Ig',m.f,con,emp,m.cuenta||'4100-001','',monto]);
+    } else if(m.tipo==='gasto'){
+      const tp=esTDC?'Dr':'Eg';
+      if(m.iva){ const neto=+(monto/1.16).toFixed(2), iva=+(monto-neto).toFixed(2);
+        rows.push([tp,m.f,con,emp,m.cuenta,neto,'']);
+        rows.push([tp,m.f,con+' IVA',emp,'1191-001-0002',iva,'']);
+      } else rows.push([tp,m.f,con,emp,m.cuenta,monto,'']);
+      rows.push([tp,m.f,con,emp,banco,'',monto]);
+    } else if(m.tipo==='personal'){
+      const tp=esTDC?'Dr':'Dr';
+      rows.push([tp,m.f,con,'personal','3900-001',monto,'']);
+      rows.push([tp,m.f,con,'personal',banco,'',monto]);
+    } else if(m.tipo==='traspaso'){
+      rows.push(['Dr',m.f,con,emp,m.cuenta||'1110-001',monto,'']);
+      rows.push(['Dr',m.f,con,emp,banco,'',monto]);
+    }
+  }
+  return rows;
+}
+$('btnExportar').onclick=()=>{
+  if(!movs.length){alert('Primero carga tus estados de cuenta.');return}
+  const rows=polizasDeMovs(movs);
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Polizas');
+  const mes=(movs[0]&&movs[0].f.slice(0,7))||'mes';
+  XLSX.writeFile(wb,'polizas_flores_'+mes+'.xlsx');
+};
+
+$('btnCuentas').onclick=()=>{
+  const c=$('cardCuentas'); c.style.display=c.style.display==='none'?'block':'none';
+  $('cuentasTxt').value=Object.entries(cuentas).map(([k,v])=>k+' = '+v).join('\n');
+};
+$('btnGuardarCuentas').onclick=()=>{
+  const nc={};
+  for(const l of $('cuentasTxt').value.split('\n')){ const p=l.split('='); if(p.length>=2&&p[0].trim())nc[p[0].trim()]=p.slice(1).join('=').trim(); }
+  cuentas=nc; saveCuentas(); render(); alert('Catálogo guardado ('+Object.keys(nc).length+' cuentas).');
+};
+
+const drop=$('drop');
+drop.onclick=()=>$('fileInp').click();
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};
+drop.ondragleave=()=>drop.classList.remove('on');
+drop.ondrop=async e=>{e.preventDefault();drop.classList.remove('on');await cargar(e.dataTransfer.files)};
+$('fileInp').onchange=async e=>cargar(e.target.files);
+async function cargar(files){
+  $('status').textContent='Leyendo…';
+  for(const f of files){ try{ await procesarArchivo(f); }catch(err){ $('status').textContent+=' ❌ '+f.name+': '+err.message; } }
+  clasificar(); render();
+}
+['fEmp','fEstado','fOrigen'].forEach(id=>$(id).onchange=render);
+
+async function init(){
+  loadCuentas();
+  await resolverAPI();
+  try{
+    const r=await fetch(API_URL+'?action=obtener_reglas');
+    const j=await r.json();
+    reglas=Array.isArray(j)?j:(j.reglas||j.data||[]);
+  }catch(e){ reglas=[]; }
+  render();
+}
+init();
+</script>
+</body>
+</html>
