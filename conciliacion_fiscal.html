@@ -50,6 +50,11 @@
   .Rancho{background:var(--rancho)} .MotoPro{background:var(--moto)} .Personal{background:var(--personal)}
   .Compartido{background:var(--compartido)} .Financiero{background:var(--fin);color:#fff}
   .Traspaso{background:var(--traspaso);color:#fff} .Revisar{background:var(--revisar);color:#fff}
+  .entsel{border:1px solid transparent;border-radius:20px;padding:3px 8px;font-size:11px;font-weight:700;
+    color:#0c1116;cursor:pointer;-webkit-appearance:none;appearance:none;outline:none}
+  .entsel:hover{border-color:var(--accent)}
+  .entsel option{background:#1e2c3a;color:#e7edf3;font-weight:600}
+  .entsel.Revisar{outline:1px dashed #f0938e}
   .tag{font-size:11px;padding:2px 7px;border-radius:5px;border:1px solid var(--line);color:var(--mut)}
   .tag.ok{color:var(--rancho);border-color:var(--rancho)}
   .tag.warn{color:var(--personal);border-color:var(--personal)}
@@ -77,8 +82,10 @@
     <div id="warn"></div>
     <div class="toolbar">
       <button id="btnXlsx">⬇ Descargar Excel de conciliación</button>
+      <button class="ghost" id="btnReset">Reiniciar mis reglas</button>
       <span class="muted" id="meta"></span>
     </div>
+    <div class="muted" style="font-size:12.5px;margin:2px 0 4px">Tip: en la columna <b>Entidad</b> puedes cambiar cualquier renglón. Si corriges un CFDI, la app recuerda a ese proveedor/cliente para siempre; en el banco recuerda ese movimiento.</div>
     <div class="tabs">
       <div class="tab on" data-t="banco">Banco</div>
       <div class="tab" data-t="rec">CFDIs recibidos</div>
@@ -96,9 +103,19 @@ const MES={ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'07',ago:'0
 const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const num=s=>{if(s==null)return 0;const v=parseFloat(String(s).replace(/[^0-9.\-]/g,''));return isNaN(v)?0:v;};
 
+/* ---------- Reglas aprendidas / correcciones (guardadas en este equipo) ---------- */
+let REGLAS = JSON.parse(localStorage.getItem('cf_reglas_cfdi')||'{}');   // {NOMBRE: entidad}
+let OVBANCO = JSON.parse(localStorage.getItem('cf_override_banco')||'{}'); // {firma: entidad}
+function guardarReglas(){localStorage.setItem('cf_reglas_cfdi',JSON.stringify(REGLAS));}
+function guardarOvBanco(){localStorage.setItem('cf_override_banco',JSON.stringify(OVBANCO));}
+function firma(m){return (m.fecha+'|'+m.desc+'|'+m.importe).slice(0,120);}
+const ENTS_CFDI=['Rancho','MotoPro','Personal','Compartido','Financiero','Revisar'];
+const ENTS_BANCO=['Rancho','MotoPro','Personal','Compartido','Financiero','Traspaso','Revisar'];
+
 /* ---------- Clasificación por entidad ---------- */
 function entRecibido(nom){
-  const n=(nom||'').toUpperCase();
+  const n=(nom||'').toUpperCase().trim();
+  if(REGLAS[n])return REGLAS[n];
   if(/MOTO REPUESTOS|REFACCIONES TOP|VALDES|DULCE NAYELI|JUAN CARLOS GONZALEZ/.test(n))return'MotoPro';
   if(/AGROTECNICO|BARDA BLANCA|GASADER|SARA MONTIEL/.test(n))return'Rancho';
   if(/ARRENDADORA|LA ESTANCIA|CHEDRAUI|ALFREDO MARTINEZ/.test(n))return'Personal';
@@ -107,11 +124,17 @@ function entRecibido(nom){
   return'Revisar';
 }
 function entEmitido(nom){
-  const n=(nom||'').toUpperCase();
+  const n=(nom||'').toUpperCase().trim();
+  if(REGLAS[n])return REGLAS[n];
   if(/LIMONES MONICA|WONDERFUL/.test(n))return'Rancho';
   return'MotoPro';
 }
-/* Reglas para movimientos del banco por texto */
+/* Movimiento de banco: primero la corrección manual, luego reglas por texto */
+function entBancoMov(m){
+  const ov=OVBANCO[firma(m)];
+  if(ov)return ov;
+  return entBanco(m.desc);
+}
 function entBanco(desc){
   const d=desc.toUpperCase();
   if(/TARJETA DE CREDITO|DISP\. T\. NEGOCIOS|DISP T NEGOCIOS/.test(d))return'Traspaso';
@@ -239,7 +262,7 @@ function render(){
   const ivaAcred=sum(REC.filter(c=>c.metodo==='PUE'),c=>c.iva);
   const ivaPorAcred=sum(REC.filter(c=>c.metodo==='PPD'),c=>c.iva);
   const ivaTras=sum(EMI,c=>c.iva);
-  const revisar=BANK.filter(m=>entBanco(m.desc)==='Revisar' && m.importe<0);
+  const revisar=BANK.filter(m=>entBancoMov(m)==='Revisar' && m.importe<0);
   $('#cards').innerHTML=[
     card('Ingresos facturados',money(totIngEmi),EMI.length+' CFDIs emitidos','--rancho'),
     card('Gastos facturados',money(totGasRec),REC.length+' CFDIs recibidos','--moto'),
@@ -251,7 +274,8 @@ function render(){
   const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>20000).sort((a,b)=>b.total-a.total);
   $('#warn').innerHTML = bigPPD.length? '<div class="warnbox">⚠ <b>Facturas PPD grandes</b> — confirma si ya están pagadas (o de qué cuenta) y solicita el REP: '
     + bigPPD.map(c=>`${(c.emisorNom||'').slice(0,26)} ${money(c.total)}`).join(' · ')+'</div>' : '';
-  $('#meta').textContent = `Banco: ${BANK.length} movs · Emitidos: ${EMI.length} · Recibidos: ${REC.length}`;
+  const nr=contarReglas();
+  $('#meta').textContent = `Banco: ${BANK.length} movs · Emitidos: ${EMI.length} · Recibidos: ${REC.length}`+(nr?` · ${nr} correcciones guardadas`:'');
   $('#status').textContent='Listo.';
   paint();
 }
@@ -263,12 +287,12 @@ function paint(){
   if(TAB==='banco'){
     h='<table><thead><tr><th>Fecha</th><th>Descripción</th><th class="r">Importe</th><th>Entidad</th><th>Factura</th></tr></thead><tbody>';
     for(const m of BANK){
-      const e=entBanco(m.desc);
+      const e=entBancoMov(m);
       const mt=m.importe<0?matchExpense(m):null;
       const tag = m.importe>=0 ? '' : (mt? `<span class="tag ok">✓ ${(mt.emisorNom||'').slice(0,20)}</span>`
         : (e==='Traspaso'?'<span class="tag">traspaso</span>':(/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase())?'<span class="tag">acuse propio</span>':'<span class="tag bad">sin factura</span>')));
       h+=`<tr><td>${m.fecha}</td><td>${m.desc}</td><td class="r ${m.importe<0?'neg':''}">${money(m.importe)}</td>
-        <td><span class="pill ${e}">${e}</span></td><td>${tag}</td></tr>`;
+        <td>${selEnt(e,'banco',firma(m))}</td><td>${tag}</td></tr>`;
     }
     h+='</tbody></table>';
   }else if(TAB==='rec'){
@@ -276,7 +300,7 @@ function paint(){
   }else if(TAB==='emi'){
     h=cfdiTable(EMI,'receptorNom',entEmitido);
   }else{
-    const sinFact=BANK.filter(m=>m.importe<0 && !matchExpense(m) && entBanco(m.desc)!=='Traspaso'
+    const sinFact=BANK.filter(m=>m.importe<0 && !matchExpense(m) && entBancoMov(m)!=='Traspaso'
       && !/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase()));
     const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>10000).sort((a,b)=>b.total-a.total);
     h='<h3 style="color:var(--personal)">1) Pagos en banco sin factura (conseguir CFDI o no deducibles)</h3>';
@@ -297,12 +321,36 @@ function cfdiTable(arr,nomKey,entFn){
     const e=entFn(c[nomKey]);
     h+=`<tr><td>${c.fecha}</td><td>${(c[nomKey]||'').slice(0,30)}</td><td class="muted">${(c.conceptos||'').slice(0,34)}</td>
       <td>${c.metodo||''}</td><td class="r">${money(c.subtotal)}</td><td class="r">${money(c.iva)}</td>
-      <td class="r">${money(c.total)}</td><td><span class="pill ${e}">${e}</span></td></tr>`;
+      <td class="r">${money(c.total)}</td><td>${selEnt(e,'cfdi',c[nomKey]||'')}</td></tr>`;
   }
   h+=`<tr style="font-weight:700"><td colspan="4">TOTAL (${arr.length})</td>
      <td class="r">${money(sum(arr,c=>c.subtotal))}</td><td class="r">${money(sum(arr,c=>c.iva))}</td>
      <td class="r">${money(sum(arr,c=>c.total))}</td><td></td></tr>`;
   return h+'</tbody></table>';
+}
+
+/* ---------- Selector de entidad editable ---------- */
+function selEnt(current,kind,id){
+  const opts=(kind==='banco'?ENTS_BANCO:ENTS_CFDI);
+  const idEnc=encodeURIComponent(id);
+  let o=opts.map(e=>`<option value="${e}" ${e===current?'selected':''}>${e}</option>`).join('');
+  return `<select class="entsel ${current}" onchange="setEnt('${kind}','${idEnc}',this.value)">${o}</select>`;
+}
+function setEnt(kind,idEnc,val){
+  const id=decodeURIComponent(idEnc);
+  if(kind==='cfdi'){
+    const key=id.toUpperCase().trim();
+    if(!key)return;
+    REGLAS[key]=val; guardarReglas();
+  }else{
+    OVBANCO[id]=val; guardarOvBanco();
+  }
+  render();
+}
+function contarReglas(){return Object.keys(REGLAS).length+Object.keys(OVBANCO).length;}
+function resetReglas(){
+  if(!confirm('¿Borrar todas tus correcciones de entidad y volver a la clasificación automática?'))return;
+  REGLAS={}; OVBANCO={}; guardarReglas(); guardarOvBanco(); render();
 }
 
 /* ---------- Exportar Excel ---------- */
@@ -317,7 +365,7 @@ function exportXlsx(){
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumen');
   const bank=[['Fecha','Descripción','Importe','Entidad','Factura amarrada']];
   for(const m of BANK){const mt=m.importe<0?matchExpense(m):null;
-    bank.push([m.fecha,m.desc,m.importe,entBanco(m.desc),mt?mt.emisorNom:'']);}
+    bank.push([m.fecha,m.desc,m.importe,entBancoMov(m),mt?mt.emisorNom:'']);}
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bank),'Banco');
   const mk=(arr,nk,fn)=>{const r=[['Fecha','Nombre','Concepto','Método','Forma','Subtotal','IVA','Total','Entidad','UUID']];
     for(const c of arr)r.push([c.fecha,c[nk],c.conceptos,c.metodo,c.forma,c.subtotal,c.iva,c.total,fn(c[nk]),c.uuid]);return r;};
@@ -336,6 +384,7 @@ drop.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');TAB=t.dataset.t;paint();});
 $('#btnXlsx').onclick=exportXlsx;
+$('#btnReset').onclick=resetReglas;
 </script>
 </body>
 </html>
