@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conciliación Fiscal · Banco ↔ CFDIs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg:#0f1720; --panel:#17222e; --panel2:#1e2c3a; --line:#2a3a4a;
+    --txt:#e7edf3; --mut:#8ea3b5; --accent:#3fa7d6;
+    --rancho:#3fae6f; --moto:#3f86d6; --personal:#e08a3c; --compartido:#c9a227;
+    --fin:#8a8f98; --traspaso:#6b7784; --revisar:#d9534f;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{padding:18px 22px;border-bottom:1px solid var(--line);background:var(--panel)}
+  h1{margin:0;font-size:18px;font-weight:700}
+  h1 span{color:var(--accent)}
+  .sub{color:var(--mut);font-size:12px;margin-top:3px}
+  .wrap{max-width:1180px;margin:0 auto;padding:22px}
+  #drop{border:2px dashed var(--line);border-radius:12px;padding:34px;text-align:center;background:var(--panel);
+    transition:.15s;cursor:pointer}
+  #drop.hot{border-color:var(--accent);background:var(--panel2)}
+  #drop b{color:var(--accent)}
+  #drop small{display:block;color:var(--mut);margin-top:8px}
+  #status{margin:14px 0;color:var(--mut);font-size:13px;min-height:20px}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(165px,1fr));gap:12px;margin:18px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-left-width:4px;border-radius:9px;padding:13px 15px}
+  .card .k{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.4px}
+  .card .v{font-size:20px;font-weight:700;margin-top:4px}
+  .card .n{font-size:11px;color:var(--mut);margin-top:2px}
+  .toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:16px 0 8px}
+  button{background:var(--accent);color:#062330;border:0;border-radius:7px;padding:9px 15px;font-weight:700;cursor:pointer;font-size:13px}
+  button.ghost{background:transparent;color:var(--txt);border:1px solid var(--line)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .tabs{display:flex;gap:4px;margin:18px 0 0;border-bottom:1px solid var(--line)}
+  .tab{padding:9px 15px;color:var(--mut);cursor:pointer;border-bottom:2px solid transparent;font-weight:600;font-size:13px}
+  .tab.on{color:var(--txt);border-bottom-color:var(--accent)}
+  table{width:100%;border-collapse:collapse;margin-top:14px;font-size:12.5px}
+  th{position:sticky;top:0;background:var(--panel2);text-align:left;padding:8px 9px;color:var(--mut);
+    font-weight:600;border-bottom:1px solid var(--line);white-space:nowrap}
+  td{padding:7px 9px;border-bottom:1px solid var(--line)}
+  tr:hover td{background:var(--panel)}
+  .r{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .neg{color:#f0938e}
+  .pill{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;color:#0c1116}
+  .Rancho{background:var(--rancho)} .MotoPro{background:var(--moto)} .Personal{background:var(--personal)}
+  .Compartido{background:var(--compartido)} .Financiero{background:var(--fin);color:#fff}
+  .Traspaso{background:var(--traspaso);color:#fff} .Revisar{background:var(--revisar);color:#fff}
+  .tag{font-size:11px;padding:2px 7px;border-radius:5px;border:1px solid var(--line);color:var(--mut)}
+  .tag.ok{color:var(--rancho);border-color:var(--rancho)}
+  .tag.warn{color:var(--personal);border-color:var(--personal)}
+  .tag.bad{color:var(--revisar);border-color:var(--revisar)}
+  .hidden{display:none}
+  .muted{color:var(--mut)}
+  .warnbox{background:#3a2a1e;border:1px solid #6b4a2a;border-radius:8px;padding:12px 14px;margin:14px 0;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Conciliación Fiscal · <span>Banco ↔ CFDIs</span></h1>
+  <div class="sub">Ranchos · Moto Pro · Personal — RFC FOSA9208236K5. Suelta el PDF de movimientos BBVA y los ZIP de CFDIs (emitidos + recibidos).</div>
+</header>
+<div class="wrap">
+  <div id="drop">
+    <b>Arrastra aquí</b> el <b>PDF "Mes actual" de BBVA</b> y los <b>2 ZIP de Siigo</b> (ingresos emitidos + recibidos)
+    <small>o haz clic para elegir archivos · todo se procesa en tu navegador, nada se sube a ningún lado</small>
+    <input id="fileInp" type="file" accept=".pdf,.zip" multiple class="hidden">
+  </div>
+  <div id="status">Esperando archivos…</div>
+
+  <div id="app" class="hidden">
+    <div class="cards" id="cards"></div>
+    <div id="warn"></div>
+    <div class="toolbar">
+      <button id="btnXlsx">⬇ Descargar Excel de conciliación</button>
+      <span class="muted" id="meta"></span>
+    </div>
+    <div class="tabs">
+      <div class="tab on" data-t="banco">Banco</div>
+      <div class="tab" data-t="rec">CFDIs recibidos</div>
+      <div class="tab" data-t="emi">CFDIs emitidos</div>
+      <div class="tab" data-t="pend">Pendientes</div>
+    </div>
+    <div id="pane"></div>
+  </div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=s=>document.querySelector(s);
+const MES={ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'07',ago:'08',sep:'09',oct:'10',nov:'11',dic:'12'};
+const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+const num=s=>{if(s==null)return 0;const v=parseFloat(String(s).replace(/[^0-9.\-]/g,''));return isNaN(v)?0:v;};
+
+/* ---------- Clasificación por entidad ---------- */
+function entRecibido(nom){
+  const n=(nom||'').toUpperCase();
+  if(/MOTO REPUESTOS|REFACCIONES TOP|VALDES|DULCE NAYELI|JUAN CARLOS GONZALEZ/.test(n))return'MotoPro';
+  if(/AGROTECNICO|BARDA BLANCA|GASADER|SARA MONTIEL/.test(n))return'Rancho';
+  if(/ARRENDADORA|LA ESTANCIA|CHEDRAUI|ALFREDO MARTINEZ/.test(n))return'Personal';
+  if(/CFE|COMISION FEDERAL|TELEFONOS|TELMEX|BONILLA/.test(n))return'Compartido';
+  if(/BBVA|CAJA POPULAR/.test(n))return'Financiero';
+  return'Revisar';
+}
+function entEmitido(nom){
+  const n=(nom||'').toUpperCase();
+  if(/LIMONES MONICA|WONDERFUL/.test(n))return'Rancho';
+  return'MotoPro';
+}
+/* Reglas para movimientos del banco por texto */
+function entBanco(desc){
+  const d=desc.toUpperCase();
+  if(/TARJETA DE CREDITO|DISP\. T\. NEGOCIOS|DISP T NEGOCIOS/.test(d))return'Traspaso';
+  if(/RENTA MOTO PRO|CAJA MOTO|MOTOPRO|PSGO CAJA MOTO/.test(d))return'MotoPro';
+  if(/AGROQUIMICOS|LIMONES|LIMON|BARDA|AGROTECNICO|DIESEL/.test(d))return'Rancho';
+  if(/SAMPLE SPEI|BANK OF AMER|WONDERFUL/.test(d))return'Rancho';
+  if(/NOMINA|IMSS|CFE|TELMEX|GOB DEL ESTADO|LIMPIEZA|PAPELERIA|SERV.*BANCA|COM SERV/.test(d))return'Compartido';
+  if(/CAFET|CHEDRAUI|OXXO|RETIRO CAJERO|PATY LIZ/.test(d))return'Personal';
+  return'Revisar';
+}
+
+/* ---------- Parser CFDI XML ---------- */
+function parseCFDI(xmlText){
+  const doc=new DOMParser().parseFromString(xmlText,'application/xml');
+  const C=doc.getElementsByTagName('cfdi:Comprobante')[0]||doc.documentElement;
+  const g=(el,a)=>el?el.getAttribute(a):null;
+  const em=doc.getElementsByTagName('cfdi:Emisor')[0];
+  const re=doc.getElementsByTagName('cfdi:Receptor')[0];
+  const tfd=doc.getElementsByTagName('tfd:TimbreFiscalDigital')[0];
+  let iva=0;
+  const tr=doc.getElementsByTagName('cfdi:Traslado');
+  for(const t of tr){if(g(t,'Impuesto')==='002')iva+=num(g(t,'Importe'));}
+  const cs=doc.getElementsByTagName('cfdi:Concepto');
+  const conceptos=[...cs].slice(0,3).map(c=>g(c,'Descripcion')||'').join(' | ').slice(0,90);
+  return {
+    uuid: tfd?g(tfd,'UUID'):null,
+    fecha:(g(C,'Fecha')||'').slice(0,10),
+    folio:g(C,'Folio'), serie:g(C,'Serie'),
+    tipo:g(C,'TipoDeComprobante'),
+    metodo:g(C,'MetodoPago'), forma:g(C,'FormaPago'),
+    subtotal:num(g(C,'SubTotal')), total:num(g(C,'Total')),
+    descuento:num(g(C,'Descuento')), iva:Math.round(iva*100)/100,
+    emisorNom:em?g(em,'Nombre'):'', emisorRfc:em?g(em,'Rfc'):'',
+    receptorNom:re?g(re,'Nombre'):'', receptorRfc:re?g(re,'Rfc'):'',
+    conceptos
+  };
+}
+
+/* ---------- Parser PDF Banco "Mes actual" ---------- */
+async function parseBancoPDF(buf){
+  const pdf=await pdfjsLib.getDocument({data:buf}).promise;
+  let full='';
+  for(let p=1;p<=pdf.numPages;p++){
+    const page=await pdf.getPage(p);
+    const c=await page.getTextContent();
+    full+=' '+c.items.map(i=>i.str).join(' ');
+  }
+  // unir decimales superíndices: "$1,234." "56" -> "$1,234.56"
+  full=full.replace(/(\$\s?-?[\d,]+\.)\s+(\d{2})/g,'$1$2').replace(/\s+/g,' ');
+  // separar en registros por fecha "DD mmm YYYY"
+  const re=/(\d{1,2})\s+(ene|feb|mar|abr|may|jun|jul|ago|sep|oct|nov|dic)\s+(\d{4})/gi;
+  let m, idx=[];
+  while((m=re.exec(full))){idx.push({pos:m.index,d:m[1].padStart(2,'0'),mo:MES[m[2].toLowerCase()],y:m[3]});}
+  const movs=[];
+  for(let i=0;i<idx.length;i++){
+    const seg=full.slice(idx[i].pos,(i+1<idx.length?idx[i+1].pos:full.length));
+    // montos $ (con posible signo -)
+    const toks=[...seg.matchAll(/-?\$\s?-?[\d,]+\.\d{2}/g)].map(x=>x[0]);
+    if(toks.length<2)continue; // necesita al menos monto + saldo
+    const saldo=num(toks[toks.length-1]);
+    const first=toks[0];
+    const val=num(first);
+    const importe=/-/.test(first)?-Math.abs(val):Math.abs(val);
+    // descripción = entre la fecha y el primer monto
+    let desc=seg.replace(/^\s*\d{1,2}\s+\w{3}\s+\d{4}/,'');
+    const cut=desc.indexOf(first);
+    if(cut>0)desc=desc.slice(0,cut);
+    desc=desc.replace(/\s+/g,' ').trim().slice(0,80);
+    movs.push({fecha:`${idx[i].y}-${idx[i].mo}-${idx[i].d}`, desc, importe, saldo});
+  }
+  return movs;
+}
+
+/* ---------- Estado global ---------- */
+let BANK=[], EMI=[], REC=[];
+
+/* ---------- Ingesta de archivos ---------- */
+async function handleFiles(files){
+  for(const f of files){
+    const nm=f.name.toLowerCase();
+    if(nm.endsWith('.pdf')){
+      $('#status').textContent='Leyendo PDF de banco…';
+      BANK=await parseBancoPDF(await f.arrayBuffer());
+    }else if(nm.endsWith('.zip')){
+      $('#status').textContent='Leyendo CFDIs de '+f.name+'…';
+      const zip=await JSZip.loadAsync(await f.arrayBuffer());
+      const out=[];
+      for(const name of Object.keys(zip.files)){
+        if(!name.toLowerCase().endsWith('.xml'))continue;
+        out.push(parseCFDI(await zip.files[name].async('string')));
+      }
+      const emitido=/emitid/.test(nm) || out.some(c=>c.emisorRfc==='FOSA9208236K5');
+      if(/emitid/.test(nm)) EMI=out; else if(/recibid/.test(nm)) REC=out;
+      else if(emitido) EMI=out; else REC=out;
+    }
+  }
+  render();
+}
+
+/* ---------- Cruce banco ↔ CFDI (nombre + monto) ---------- */
+function matchExpense(mov){
+  if(mov.importe>=0)return null;
+  const amt=Math.abs(mov.importe);
+  const d=mov.desc.toUpperCase();
+  const cand=REC.filter(c=>Math.abs(c.total-amt)<=Math.max(2,amt*0.01));
+  // preferir el que también coincida por nombre/keyword
+  const key=[['RENTA','VALDES'],['CFE','COMISION FEDERAL'],['TELMEX','TELEFONOS'],
+    ['CHEDRAUI','CHEDRAUI'],['LIMPIEZA','BONILLA'],['PAPELERIA','BONILLA'],['AGROQUIMICOS','AGROTECNICO']];
+  for(const c of cand){
+    const nm=(c.emisorNom||'').toUpperCase();
+    for(const [bank,cfdi] of key){ if(d.includes(bank)&&nm.includes(cfdi))return c; }
+  }
+  return cand[0]||null;
+}
+
+/* ---------- Render ---------- */
+let TAB='banco';
+function sum(a,f){return a.reduce((s,x)=>s+f(x),0);}
+function render(){
+  if(!BANK.length && !EMI.length && !REC.length){return;}
+  $('#app').classList.remove('hidden');
+  const ingRec=REC; // recibidos = gastos
+  const totIngEmi=sum(EMI,c=>c.total);
+  const totGasRec=sum(REC,c=>c.total);
+  const ivaAcred=sum(REC.filter(c=>c.metodo==='PUE'),c=>c.iva);
+  const ivaPorAcred=sum(REC.filter(c=>c.metodo==='PPD'),c=>c.iva);
+  const ivaTras=sum(EMI,c=>c.iva);
+  const revisar=BANK.filter(m=>entBanco(m.desc)==='Revisar' && m.importe<0);
+  $('#cards').innerHTML=[
+    card('Ingresos facturados',money(totIngEmi),EMI.length+' CFDIs emitidos','--rancho'),
+    card('Gastos facturados',money(totGasRec),REC.length+' CFDIs recibidos','--moto'),
+    card('IVA trasladado',money(ivaTras),'de tus ventas','--compartido'),
+    card('IVA acreditable (PUE)',money(ivaAcred),'inmediato','--rancho'),
+    card('IVA por acreditar (PPD)',money(ivaPorAcred),'espera REP','--personal'),
+    card('Movs. banco',BANK.length,revisar.length+' por revisar','--fin'),
+  ].join('');
+  const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>20000).sort((a,b)=>b.total-a.total);
+  $('#warn').innerHTML = bigPPD.length? '<div class="warnbox">⚠ <b>Facturas PPD grandes</b> — confirma si ya están pagadas (o de qué cuenta) y solicita el REP: '
+    + bigPPD.map(c=>`${(c.emisorNom||'').slice(0,26)} ${money(c.total)}`).join(' · ')+'</div>' : '';
+  $('#meta').textContent = `Banco: ${BANK.length} movs · Emitidos: ${EMI.length} · Recibidos: ${REC.length}`;
+  $('#status').textContent='Listo.';
+  paint();
+}
+function card(k,v,n,varname){
+  return `<div class="card" style="border-left-color:var(${varname})"><div class="k">${k}</div><div class="v">${v}</div><div class="n">${n}</div></div>`;
+}
+function paint(){
+  const p=$('#pane'); let h='';
+  if(TAB==='banco'){
+    h='<table><thead><tr><th>Fecha</th><th>Descripción</th><th class="r">Importe</th><th>Entidad</th><th>Factura</th></tr></thead><tbody>';
+    for(const m of BANK){
+      const e=entBanco(m.desc);
+      const mt=m.importe<0?matchExpense(m):null;
+      const tag = m.importe>=0 ? '' : (mt? `<span class="tag ok">✓ ${(mt.emisorNom||'').slice(0,20)}</span>`
+        : (e==='Traspaso'?'<span class="tag">traspaso</span>':(/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase())?'<span class="tag">acuse propio</span>':'<span class="tag bad">sin factura</span>')));
+      h+=`<tr><td>${m.fecha}</td><td>${m.desc}</td><td class="r ${m.importe<0?'neg':''}">${money(m.importe)}</td>
+        <td><span class="pill ${e}">${e}</span></td><td>${tag}</td></tr>`;
+    }
+    h+='</tbody></table>';
+  }else if(TAB==='rec'){
+    h=cfdiTable(REC,'emisorNom',entRecibido);
+  }else if(TAB==='emi'){
+    h=cfdiTable(EMI,'receptorNom',entEmitido);
+  }else{
+    const sinFact=BANK.filter(m=>m.importe<0 && !matchExpense(m) && entBanco(m.desc)!=='Traspaso'
+      && !/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase()));
+    const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>10000).sort((a,b)=>b.total-a.total);
+    h='<h3 style="color:var(--personal)">1) Pagos en banco sin factura (conseguir CFDI o no deducibles)</h3>';
+    h+='<table><thead><tr><th>Fecha</th><th>Descripción</th><th class="r">Importe</th></tr></thead><tbody>';
+    for(const m of sinFact)h+=`<tr><td>${m.fecha}</td><td>${m.desc}</td><td class="r neg">${money(m.importe)}</td></tr>`;
+    h+='</tbody></table>';
+    h+='<h3 style="color:var(--personal);margin-top:22px">2) Facturas PPD grandes sin pago claro</h3>';
+    h+='<table><thead><tr><th>Proveedor</th><th>Concepto</th><th class="r">Total</th><th>Método</th></tr></thead><tbody>';
+    for(const c of bigPPD)h+=`<tr><td>${c.emisorNom}</td><td>${c.conceptos}</td><td class="r">${money(c.total)}</td><td>${c.metodo}</td></tr>`;
+    h+='</tbody></table>';
+    h+='<p class="muted" style="margin-top:16px">3) Nómina, IMSS y Gob. del Estado no requieren CFDI de proveedor: se deducen con tus CFDI de nómina y los acuses SIPARE/estatales.</p>';
+  }
+  p.innerHTML=h;
+}
+function cfdiTable(arr,nomKey,entFn){
+  let h='<table><thead><tr><th>Fecha</th><th>Nombre</th><th>Concepto</th><th>Mét.</th><th class="r">Subtotal</th><th class="r">IVA</th><th class="r">Total</th><th>Entidad</th></tr></thead><tbody>';
+  for(const c of [...arr].sort((a,b)=>(a.fecha>b.fecha?1:-1))){
+    const e=entFn(c[nomKey]);
+    h+=`<tr><td>${c.fecha}</td><td>${(c[nomKey]||'').slice(0,30)}</td><td class="muted">${(c.conceptos||'').slice(0,34)}</td>
+      <td>${c.metodo||''}</td><td class="r">${money(c.subtotal)}</td><td class="r">${money(c.iva)}</td>
+      <td class="r">${money(c.total)}</td><td><span class="pill ${e}">${e}</span></td></tr>`;
+  }
+  h+=`<tr style="font-weight:700"><td colspan="4">TOTAL (${arr.length})</td>
+     <td class="r">${money(sum(arr,c=>c.subtotal))}</td><td class="r">${money(sum(arr,c=>c.iva))}</td>
+     <td class="r">${money(sum(arr,c=>c.total))}</td><td></td></tr>`;
+  return h+'</tbody></table>';
+}
+
+/* ---------- Exportar Excel ---------- */
+function exportXlsx(){
+  const wb=XLSX.utils.book_new();
+  const res=[['CONCILIACIÓN BANCO ↔ CFDIs — RFC FOSA9208236K5'],[],
+    ['INGRESOS FACTURADOS','','Total',sum(EMI,c=>c.total)],
+    ['GASTOS FACTURADOS','','Total',sum(REC,c=>c.total)],
+    ['IVA trasladado (ventas)','','',sum(EMI,c=>c.iva)],
+    ['IVA acreditable PUE','','',sum(REC.filter(c=>c.metodo==='PUE'),c=>c.iva)],
+    ['IVA por acreditar PPD','','',sum(REC.filter(c=>c.metodo==='PPD'),c=>c.iva)]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumen');
+  const bank=[['Fecha','Descripción','Importe','Entidad','Factura amarrada']];
+  for(const m of BANK){const mt=m.importe<0?matchExpense(m):null;
+    bank.push([m.fecha,m.desc,m.importe,entBanco(m.desc),mt?mt.emisorNom:'']);}
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bank),'Banco');
+  const mk=(arr,nk,fn)=>{const r=[['Fecha','Nombre','Concepto','Método','Forma','Subtotal','IVA','Total','Entidad','UUID']];
+    for(const c of arr)r.push([c.fecha,c[nk],c.conceptos,c.metodo,c.forma,c.subtotal,c.iva,c.total,fn(c[nk]),c.uuid]);return r;};
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mk(REC,'emisorNom',entRecibido)),'CFDIs recibidos');
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mk(EMI,'receptorNom',entEmitido)),'CFDIs emitidos');
+  XLSX.writeFile(wb,'Conciliacion_Fiscal.xlsx');
+}
+
+/* ---------- Eventos ---------- */
+const drop=$('#drop'),inp=$('#fileInp');
+drop.onclick=()=>inp.click();
+inp.onchange=e=>handleFiles([...e.target.files]);
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('hot');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('hot');}));
+drop.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');TAB=t.dataset.t;paint();});
+$('#btnXlsx').onclick=exportXlsx;
+</script>
+</body>
+</html>
