@@ -72,7 +72,7 @@
 <div class="wrap">
   <div id="drop">
     <b>Arrastra aquí</b> el <b>PDF "Mes actual" de BBVA</b> y los <b>ZIP de Siigo</b> (ingresos emitidos, recibidos y <b>pagos recibidos / REP</b>)
-    <small>o haz clic para elegir archivos · todo se procesa en tu navegador, nada se sube a ningún lado</small>
+    <small>o haz clic para elegir archivos · puedes soltar varios meses (junio + julio…) y se acumulan · todo se procesa en tu navegador</small>
     <input id="fileInp" type="file" accept=".pdf,.zip" multiple class="hidden">
   </div>
   <div id="status">Esperando archivos…</div>
@@ -82,6 +82,7 @@
     <div id="warn"></div>
     <div class="toolbar">
       <button id="btnXlsx">⬇ Descargar Excel de conciliación</button>
+      <button class="ghost" id="btnLimpiar">🗑 Limpiar cargados</button>
       <button class="ghost" id="btnReset">Reiniciar mis reglas</button>
       <span class="muted" id="meta"></span>
     </div>
@@ -259,13 +260,21 @@ function rebuildPagadas(){
 }
 function tieneREP(c){ return c.uuid && PAGADAS.has(String(c.uuid).toUpperCase()); }
 
-/* ---------- Ingesta de archivos ---------- */
+/* ---------- Ingesta de archivos (acumula varios meses, sin duplicar) ---------- */
+const keyCFDI = c => ((c.uuid||'').toUpperCase()) || (c.emisorNom+'|'+c.total+'|'+c.fecha+'|'+c.folio);
+const keyREP  = r => (r.emisorNom+'|'+r.monto+'|'+r.fecha+'|'+r.docs.map(d=>d.uuid).join(',')).slice(0,180);
+function mergeBy(target,items,keyFn){
+  const have=new Set(target.map(keyFn));
+  let add=0;
+  for(const it of items){ const k=keyFn(it); if(!have.has(k)){ target.push(it); have.add(k); add++; } }
+  return add;
+}
 async function handleFiles(files){
   for(const f of files){
     const nm=f.name.toLowerCase();
     if(nm.endsWith('.pdf')){
       $('#status').textContent='Leyendo PDF de banco…';
-      BANK=await parseBancoPDF(await f.arrayBuffer());
+      BANK=await parseBancoPDF(await f.arrayBuffer());  // el banco es de un mes: se reemplaza
     }else if(nm.endsWith('.zip')){
       $('#status').textContent='Leyendo CFDIs de '+f.name+'…';
       const zip=await JSZip.loadAsync(await f.arrayBuffer());
@@ -278,11 +287,12 @@ async function handleFiles(files){
       if(esPagos){
         const reps=[];
         for(const c of out){ for(const pg of (c.pagos||[])){ reps.push({emisorNom:c.emisorNom, fecha:pg.fecha||c.fecha, monto:pg.monto, docs:pg.docs}); } }
-        REPS=reps; rebuildPagadas();
-      } else if(/emitid/.test(nm)) EMI=out.filter(c=>c.tipo!=='P');
-      else if(/recibid/.test(nm)) REC=out.filter(c=>c.tipo!=='P');
-      else if(out.some(c=>c.emisorRfc==='FOSA9208236K5')) EMI=out.filter(c=>c.tipo!=='P');
-      else REC=out.filter(c=>c.tipo!=='P');
+        mergeBy(REPS,reps,keyREP); rebuildPagadas();
+      } else {
+        const fac=out.filter(c=>c.tipo!=='P');
+        const esEmi=/emitid/.test(nm) || (!/recibid/.test(nm) && out.some(c=>c.emisorRfc==='FOSA9208236K5'));
+        if(esEmi) mergeBy(EMI,fac,keyCFDI); else mergeBy(REC,fac,keyCFDI);
+      }
     }
   }
   render();
@@ -476,6 +486,12 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');TAB=t.dataset.t;paint();});
 $('#btnXlsx').onclick=exportXlsx;
 $('#btnReset').onclick=resetReglas;
+$('#btnLimpiar').onclick=()=>{
+  if(!confirm('¿Quitar todos los CFDIs, REP y el banco cargados? (Tus reglas de clasificación se conservan.)'))return;
+  BANK=[];EMI=[];REC=[];REPS=[];PAGADAS=new Set();
+  $('#app').classList.add('hidden');
+  $('#status').textContent='Listo para cargar. Puedes soltar varios meses (junio + julio…) y se acumulan.';
+};
 
 /* ---- Al abrir: conectar al backend y traer las reglas guardadas ---- */
 (async function init(){
