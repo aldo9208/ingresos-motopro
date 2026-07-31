@@ -103,12 +103,44 @@ const MES={ene:'01',feb:'02',mar:'03',abr:'04',may:'05',jun:'06',jul:'07',ago:'0
 const money=n=>(n<0?'-':'')+'$'+Math.abs(n).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
 const num=s=>{if(s==null)return 0;const v=parseFloat(String(s).replace(/[^0-9.\-]/g,''));return isNaN(v)?0:v;};
 
-/* ---------- Reglas aprendidas / correcciones (guardadas en este equipo) ---------- */
+/* ---------- Reglas aprendidas / correcciones ---------- */
+/* CFDI (por nombre) se sincronizan con el backend Apps Script (te siguen entre computadoras).
+   Banco (por firma de movimiento) se quedan solo en este equipo, porque no se repiten mes a mes. */
 let REGLAS = JSON.parse(localStorage.getItem('cf_reglas_cfdi')||'{}');   // {NOMBRE: entidad}
 let OVBANCO = JSON.parse(localStorage.getItem('cf_override_banco')||'{}'); // {firma: entidad}
 function guardarReglas(){localStorage.setItem('cf_reglas_cfdi',JSON.stringify(REGLAS));}
 function guardarOvBanco(){localStorage.setItem('cf_override_banco',JSON.stringify(OVBANCO));}
 function firma(m){return (m.fecha+'|'+m.desc+'|'+m.importe).slice(0,120);}
+
+/* ---- Backend Apps Script (mismo que usa Contabilidad Flores) ---- */
+let API_URL='';
+const PREF='CONCILIA::';
+async function resolverAPI(){
+  try{
+    const t=await (await fetch('contabilidad_motopro.html')).text();
+    const m=t.match(/https:\/\/script\.google\.com\/macros\/s\/[^"'`]+\/exec/);
+    if(m) API_URL=m[0];
+  }catch(e){}
+}
+async function cargarReglasBackend(){
+  if(!API_URL) return;
+  try{
+    const r=await fetch(API_URL+'?action=obtener_reglas');
+    const j=await r.json();
+    const arr=Array.isArray(j)?j:(j.reglas||j.data||[]);
+    for(const row of arr){
+      const k=String(row.clave||'');
+      if(k.startsWith(PREF) && row.empresa){ REGLAS[k.slice(PREF.length)]=row.empresa; }  // el más reciente gana (van al final)
+    }
+    guardarReglas();
+  }catch(e){ /* sin conexión: se usan las reglas locales */ }
+}
+async function guardarReglaBackend(nombre,entidad){
+  if(!API_URL) return;
+  const regla={clave:PREF+nombre, empresa:entidad, cuenta_cargo:'', cuenta_abono:'', tipo_poliza:'', etiqueta:'conciliacion'};
+  try{ await fetch(API_URL,{method:'POST',body:JSON.stringify({action:'guardar_regla',regla})}); }
+  catch(e){ /* se conserva local; se re-intentará al reclasificar */ }
+}
 const ENTS_CFDI=['Rancho','MotoPro','Personal','Compartido','Financiero','Revisar'];
 const ENTS_BANCO=['Rancho','MotoPro','Personal','Compartido','Financiero','Traspaso','Revisar'];
 
@@ -342,6 +374,7 @@ function setEnt(kind,idEnc,val){
     const key=id.toUpperCase().trim();
     if(!key)return;
     REGLAS[key]=val; guardarReglas();
+    guardarReglaBackend(key,val);   // sincroniza entre computadoras
   }else{
     OVBANCO[id]=val; guardarOvBanco();
   }
@@ -349,8 +382,10 @@ function setEnt(kind,idEnc,val){
 }
 function contarReglas(){return Object.keys(REGLAS).length+Object.keys(OVBANCO).length;}
 function resetReglas(){
-  if(!confirm('¿Borrar todas tus correcciones de entidad y volver a la clasificación automática?'))return;
-  REGLAS={}; OVBANCO={}; guardarReglas(); guardarOvBanco(); render();
+  if(!confirm('¿Limpiar las correcciones del BANCO de este equipo? (Las reglas de proveedores/clientes están guardadas en tu backend y se vuelven a cargar solas.)'))return;
+  OVBANCO={}; guardarOvBanco();
+  REGLAS={}; guardarReglas();
+  cargarReglasBackend().then(render);
 }
 
 /* ---------- Exportar Excel ---------- */
@@ -385,6 +420,18 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');TAB=t.dataset.t;paint();});
 $('#btnXlsx').onclick=exportXlsx;
 $('#btnReset').onclick=resetReglas;
+
+/* ---- Al abrir: conectar al backend y traer las reglas guardadas ---- */
+(async function init(){
+  await resolverAPI();
+  // migración única: sube al backend las correcciones que ya tenías en este equipo
+  if(API_URL && !localStorage.getItem('cf_migrado') && Object.keys(REGLAS).length){
+    for(const [k,v] of Object.entries(REGLAS)){ await guardarReglaBackend(k,v); }
+    localStorage.setItem('cf_migrado','1');
+  }
+  await cargarReglasBackend();
+  if(BANK.length||EMI.length||REC.length) render();
+})();
 </script>
 </body>
 </html>
