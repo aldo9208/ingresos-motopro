@@ -71,7 +71,7 @@
 </header>
 <div class="wrap">
   <div id="drop">
-    <b>Arrastra aquí</b> el <b>PDF "Mes actual" de BBVA</b> y los <b>2 ZIP de Siigo</b> (ingresos emitidos + recibidos)
+    <b>Arrastra aquí</b> el <b>PDF "Mes actual" de BBVA</b> y los <b>ZIP de Siigo</b> (ingresos emitidos, recibidos y <b>pagos recibidos / REP</b>)
     <small>o haz clic para elegir archivos · todo se procesa en tu navegador, nada se sube a ningún lado</small>
     <input id="fileInp" type="file" accept=".pdf,.zip" multiple class="hidden">
   </div>
@@ -191,6 +191,16 @@ function parseCFDI(xmlText){
   for(const t of tr){if(g(t,'Impuesto')==='002')iva+=num(g(t,'Importe'));}
   const cs=doc.getElementsByTagName('cfdi:Concepto');
   const conceptos=[...cs].slice(0,3).map(c=>g(c,'Descripcion')||'').join(' | ').slice(0,90);
+  // Complemento de pago (REP)
+  const P_NS='http://www.sat.gob.mx/Pagos20';
+  const pagos=[];
+  const pgs=doc.getElementsByTagNameNS(P_NS,'Pago');
+  for(const p of pgs){
+    const docs=[];
+    const drs=p.getElementsByTagNameNS(P_NS,'DoctoRelacionado');
+    for(const dr of drs){ docs.push({uuid:(dr.getAttribute('IdDocumento')||'').toUpperCase(), impPagado:num(dr.getAttribute('ImpPagado'))}); }
+    pagos.push({monto:num(p.getAttribute('Monto')), fecha:(p.getAttribute('FechaPago')||'').slice(0,10), docs});
+  }
   return {
     uuid: tfd?g(tfd,'UUID'):null,
     fecha:(g(C,'Fecha')||'').slice(0,10),
@@ -201,7 +211,7 @@ function parseCFDI(xmlText){
     descuento:num(g(C,'Descuento')), iva:Math.round(iva*100)/100,
     emisorNom:em?g(em,'Nombre'):'', emisorRfc:em?g(em,'Rfc'):'',
     receptorNom:re?g(re,'Nombre'):'', receptorRfc:re?g(re,'Rfc'):'',
-    conceptos
+    conceptos, pagos
   };
 }
 
@@ -241,7 +251,13 @@ async function parseBancoPDF(buf){
 }
 
 /* ---------- Estado global ---------- */
-let BANK=[], EMI=[], REC=[];
+let BANK=[], EMI=[], REC=[], REPS=[];
+let PAGADAS=new Set();  // UUIDs de facturas ya cubiertas por un REP
+function rebuildPagadas(){
+  PAGADAS=new Set();
+  for(const r of REPS) for(const d of r.docs) if(d.uuid) PAGADAS.add(d.uuid);
+}
+function tieneREP(c){ return c.uuid && PAGADAS.has(String(c.uuid).toUpperCase()); }
 
 /* ---------- Ingesta de archivos ---------- */
 async function handleFiles(files){
@@ -258,28 +274,37 @@ async function handleFiles(files){
         if(!name.toLowerCase().endsWith('.xml'))continue;
         out.push(parseCFDI(await zip.files[name].async('string')));
       }
-      const emitido=/emitid/.test(nm) || out.some(c=>c.emisorRfc==='FOSA9208236K5');
-      if(/emitid/.test(nm)) EMI=out; else if(/recibid/.test(nm)) REC=out;
-      else if(emitido) EMI=out; else REC=out;
+      const esPagos = nm.includes('pago') || out.some(c=>c.tipo==='P' && c.pagos.length);
+      if(esPagos){
+        const reps=[];
+        for(const c of out){ for(const pg of (c.pagos||[])){ reps.push({emisorNom:c.emisorNom, fecha:pg.fecha||c.fecha, monto:pg.monto, docs:pg.docs}); } }
+        REPS=reps; rebuildPagadas();
+      } else if(/emitid/.test(nm)) EMI=out.filter(c=>c.tipo!=='P');
+      else if(/recibid/.test(nm)) REC=out.filter(c=>c.tipo!=='P');
+      else if(out.some(c=>c.emisorRfc==='FOSA9208236K5')) EMI=out.filter(c=>c.tipo!=='P');
+      else REC=out.filter(c=>c.tipo!=='P');
     }
   }
   render();
 }
 
-/* ---------- Cruce banco ↔ CFDI (nombre + monto) ---------- */
+/* ---------- Cruce banco ↔ CFDI/REP ---------- */
 function matchExpense(mov){
   if(mov.importe>=0)return null;
   const amt=Math.abs(mov.importe);
   const d=mov.desc.toUpperCase();
+  // 1) REP: un pago cuyo monto coincide con el cargo del banco
+  const rep=REPS.find(r=>Math.abs(r.monto-amt)<=Math.max(2,amt*0.01));
+  if(rep) return {emisorNom:rep.emisorNom, via:'rep'};
+  // 2) factura PUE cuyo total coincide (nombre + monto)
   const cand=REC.filter(c=>Math.abs(c.total-amt)<=Math.max(2,amt*0.01));
-  // preferir el que también coincida por nombre/keyword
   const key=[['RENTA','VALDES'],['CFE','COMISION FEDERAL'],['TELMEX','TELEFONOS'],
     ['CHEDRAUI','CHEDRAUI'],['LIMPIEZA','BONILLA'],['PAPELERIA','BONILLA'],['AGROQUIMICOS','AGROTECNICO']];
   for(const c of cand){
     const nm=(c.emisorNom||'').toUpperCase();
-    for(const [bank,cfdi] of key){ if(d.includes(bank)&&nm.includes(cfdi))return c; }
+    for(const [bank,cfdi] of key){ if(d.includes(bank)&&nm.includes(cfdi))return {emisorNom:c.emisorNom, via:'fac'}; }
   }
-  return cand[0]||null;
+  return cand[0]?{emisorNom:cand[0].emisorNom, via:'fac'}:null;
 }
 
 /* ---------- Render ---------- */
@@ -290,24 +315,26 @@ function render(){
   $('#app').classList.remove('hidden');
   const ingRec=REC; // recibidos = gastos
   const totIngEmi=sum(EMI,c=>c.total);
+  rebuildPagadas();
   const totGasRec=sum(REC,c=>c.total);
-  const ivaAcred=sum(REC.filter(c=>c.metodo==='PUE'),c=>c.iva);
-  const ivaPorAcred=sum(REC.filter(c=>c.metodo==='PPD'),c=>c.iva);
+  const ppdConRep=REC.filter(c=>c.metodo==='PPD'&&tieneREP(c));
+  const ivaAcred=sum(REC.filter(c=>c.metodo==='PUE'||(c.metodo==='PPD'&&tieneREP(c))),c=>c.iva);
+  const ivaPorAcred=sum(REC.filter(c=>c.metodo==='PPD'&&!tieneREP(c)),c=>c.iva);
   const ivaTras=sum(EMI,c=>c.iva);
   const revisar=BANK.filter(m=>entBancoMov(m)==='Revisar' && m.importe<0);
   $('#cards').innerHTML=[
     card('Ingresos facturados',money(totIngEmi),EMI.length+' CFDIs emitidos','--rancho'),
     card('Gastos facturados',money(totGasRec),REC.length+' CFDIs recibidos','--moto'),
     card('IVA trasladado',money(ivaTras),'de tus ventas','--compartido'),
-    card('IVA acreditable (PUE)',money(ivaAcred),'inmediato','--rancho'),
-    card('IVA por acreditar (PPD)',money(ivaPorAcred),'espera REP','--personal'),
-    card('Movs. banco',BANK.length,revisar.length+' por revisar','--fin'),
+    card('IVA acreditable',money(ivaAcred),'PUE + PPD con REP','--rancho'),
+    card('IVA por acreditar',money(ivaPorAcred),(REC.filter(c=>c.metodo==='PPD'&&!tieneREP(c)).length)+' PPD sin REP','--personal'),
+    card('REP recibidos',REPS.length,ppdConRep.length+' facturas liberadas','--fin'),
   ].join('');
-  const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>20000).sort((a,b)=>b.total-a.total);
-  $('#warn').innerHTML = bigPPD.length? '<div class="warnbox">⚠ <b>Facturas PPD grandes</b> — confirma si ya están pagadas (o de qué cuenta) y solicita el REP: '
+  const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>20000&&!tieneREP(c)).sort((a,b)=>b.total-a.total);
+  $('#warn').innerHTML = bigPPD.length? '<div class="warnbox">⚠ <b>Facturas PPD grandes sin REP</b> — confirma si ya están pagadas y solicita el complemento: '
     + bigPPD.map(c=>`${(c.emisorNom||'').slice(0,26)} ${money(c.total)}`).join(' · ')+'</div>' : '';
   const nr=contarReglas();
-  $('#meta').textContent = `Banco: ${BANK.length} movs · Emitidos: ${EMI.length} · Recibidos: ${REC.length}`+(nr?` · ${nr} correcciones guardadas`:'');
+  $('#meta').textContent = `Banco: ${BANK.length} movs · Emitidos: ${EMI.length} · Recibidos: ${REC.length} · REP: ${REPS.length}`+(nr?` · ${nr} correcciones`:'');
   $('#status').textContent='Listo.';
   paint();
 }
@@ -321,7 +348,7 @@ function paint(){
     for(const m of BANK){
       const e=entBancoMov(m);
       const mt=m.importe<0?matchExpense(m):null;
-      const tag = m.importe>=0 ? '' : (mt? `<span class="tag ok">✓ ${(mt.emisorNom||'').slice(0,20)}</span>`
+      const tag = m.importe>=0 ? '' : (mt? `<span class="tag ok">✓ ${(mt.emisorNom||'').slice(0,18)}${mt.via==='rep'?' · REP':''}</span>`
         : (e==='Traspaso'?'<span class="tag">traspaso</span>':(/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase())?'<span class="tag">acuse propio</span>':'<span class="tag bad">sin factura</span>')));
       h+=`<tr><td>${m.fecha}</td><td>${m.desc}</td><td class="r ${m.importe<0?'neg':''}">${money(m.importe)}</td>
         <td>${selEnt(e,'banco',firma(m))}</td><td>${tag}</td></tr>`;
@@ -334,12 +361,12 @@ function paint(){
   }else{
     const sinFact=BANK.filter(m=>m.importe<0 && !matchExpense(m) && entBancoMov(m)!=='Traspaso'
       && !/NOMINA|IMSS|GOB DEL ESTADO/.test(m.desc.toUpperCase()));
-    const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>10000).sort((a,b)=>b.total-a.total);
-    h='<h3 style="color:var(--personal)">1) Pagos en banco sin factura (conseguir CFDI o no deducibles)</h3>';
+    const bigPPD=REC.filter(c=>c.metodo==='PPD'&&c.total>10000&&!tieneREP(c)).sort((a,b)=>b.total-a.total);
+    h='<h3 style="color:var(--personal)">1) Pagos en banco sin factura ni REP (conseguir CFDI o no deducibles)</h3>';
     h+='<table><thead><tr><th>Fecha</th><th>Descripción</th><th class="r">Importe</th></tr></thead><tbody>';
     for(const m of sinFact)h+=`<tr><td>${m.fecha}</td><td>${m.desc}</td><td class="r neg">${money(m.importe)}</td></tr>`;
     h+='</tbody></table>';
-    h+='<h3 style="color:var(--personal);margin-top:22px">2) Facturas PPD grandes sin pago claro</h3>';
+    h+='<h3 style="color:var(--personal);margin-top:22px">2) Facturas PPD grandes sin REP recibido</h3>';
     h+='<table><thead><tr><th>Proveedor</th><th>Concepto</th><th class="r">Total</th><th>Método</th></tr></thead><tbody>';
     for(const c of bigPPD)h+=`<tr><td>${c.emisorNom}</td><td>${c.conceptos}</td><td class="r">${money(c.total)}</td><td>${c.metodo}</td></tr>`;
     h+='</tbody></table>';
@@ -351,8 +378,11 @@ function cfdiTable(arr,nomKey,entFn){
   let h='<table><thead><tr><th>Fecha</th><th>Nombre</th><th>Concepto</th><th>Mét.</th><th class="r">Subtotal</th><th class="r">IVA</th><th class="r">Total</th><th>Entidad</th></tr></thead><tbody>';
   for(const c of [...arr].sort((a,b)=>(a.fecha>b.fecha?1:-1))){
     const e=entFn(c[nomKey]);
+    const metCell = c.metodo==='PPD'
+      ? (tieneREP(c)?'PPD <span class="tag ok" style="padding:0 5px">REP✓</span>':'<span class="tag warn" style="padding:0 5px">PPD</span>')
+      : (c.metodo||'');
     h+=`<tr><td>${c.fecha}</td><td>${(c[nomKey]||'').slice(0,30)}</td><td class="muted">${(c.conceptos||'').slice(0,34)}</td>
-      <td>${c.metodo||''}</td><td class="r">${money(c.subtotal)}</td><td class="r">${money(c.iva)}</td>
+      <td>${metCell}</td><td class="r">${money(c.subtotal)}</td><td class="r">${money(c.iva)}</td>
       <td class="r">${money(c.total)}</td><td>${selEnt(e,'cfdi',c[nomKey]||'')}</td></tr>`;
   }
   h+=`<tr style="font-weight:700"><td colspan="4">TOTAL (${arr.length})</td>
@@ -390,22 +420,26 @@ function resetReglas(){
 
 /* ---------- Exportar Excel ---------- */
 function exportXlsx(){
+  rebuildPagadas();
   const wb=XLSX.utils.book_new();
   const res=[['CONCILIACIÓN BANCO ↔ CFDIs — RFC FOSA9208236K5'],[],
     ['INGRESOS FACTURADOS','','Total',sum(EMI,c=>c.total)],
     ['GASTOS FACTURADOS','','Total',sum(REC,c=>c.total)],
     ['IVA trasladado (ventas)','','',sum(EMI,c=>c.iva)],
-    ['IVA acreditable PUE','','',sum(REC.filter(c=>c.metodo==='PUE'),c=>c.iva)],
-    ['IVA por acreditar PPD','','',sum(REC.filter(c=>c.metodo==='PPD'),c=>c.iva)]];
+    ['IVA acreditable (PUE + PPD con REP)','','',sum(REC.filter(c=>c.metodo==='PUE'||(c.metodo==='PPD'&&tieneREP(c))),c=>c.iva)],
+    ['IVA por acreditar (PPD sin REP)','','',sum(REC.filter(c=>c.metodo==='PPD'&&!tieneREP(c)),c=>c.iva)]];
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(res),'Resumen');
-  const bank=[['Fecha','Descripción','Importe','Entidad','Factura amarrada']];
+  const bank=[['Fecha','Descripción','Importe','Entidad','Factura amarrada','Vía']];
   for(const m of BANK){const mt=m.importe<0?matchExpense(m):null;
-    bank.push([m.fecha,m.desc,m.importe,entBancoMov(m),mt?mt.emisorNom:'']);}
+    bank.push([m.fecha,m.desc,m.importe,entBancoMov(m),mt?mt.emisorNom:'',mt?(mt.via==='rep'?'REP':'factura'):'']);}
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(bank),'Banco');
-  const mk=(arr,nk,fn)=>{const r=[['Fecha','Nombre','Concepto','Método','Forma','Subtotal','IVA','Total','Entidad','UUID']];
-    for(const c of arr)r.push([c.fecha,c[nk],c.conceptos,c.metodo,c.forma,c.subtotal,c.iva,c.total,fn(c[nk]),c.uuid]);return r;};
+  const mk=(arr,nk,fn)=>{const r=[['Fecha','Nombre','Concepto','Método','REP','Forma','Subtotal','IVA','Total','Entidad','UUID']];
+    for(const c of arr)r.push([c.fecha,c[nk],c.conceptos,c.metodo,(c.metodo==='PPD'?(tieneREP(c)?'sí':'falta'):''),c.forma,c.subtotal,c.iva,c.total,fn(c[nk]),c.uuid]);return r;};
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mk(REC,'emisorNom',entRecibido)),'CFDIs recibidos');
   XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mk(EMI,'receptorNom',entEmitido)),'CFDIs emitidos');
+  if(REPS.length){ const rr=[['Fecha pago','Proveedor','Monto pago','Facturas']];
+    for(const r of REPS)rr.push([r.fecha,r.emisorNom,r.monto,r.docs.length]);
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rr),'REP recibidos'); }
   XLSX.writeFile(wb,'Conciliacion_Fiscal.xlsx');
 }
 
