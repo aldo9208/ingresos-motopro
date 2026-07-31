@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contabilidad Flores Salame</title>
+<style>
+  :root{
+    --bg:#F7F6F2;--surface:#FFFFFF;--ink:#19170F;--ink-soft:#5C574B;--line:#E4E0D6;
+    --amber:#E0701B;--amber-soft:#FBEEDF;--green:#1B7A4B;--blue:#2C5C8A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  header{background:var(--ink);color:#fff;padding:12px 18px;display:flex;align-items:center;gap:12px;flex:0 0 auto}
+  .logo{width:36px;height:36px;border-radius:9px;background:var(--amber);display:grid;place-items:center;font-weight:800;font-size:16px;color:#19170F;letter-spacing:-1px}
+  header h1{font-size:16px;font-weight:700;line-height:1.1}
+  header .sub{font-size:11.5px;color:#B8B2A4;margin-top:1px}
+  nav{background:var(--surface);border-bottom:1px solid var(--line);padding:0 12px;display:flex;gap:4px;overflow-x:auto;flex:0 0 auto}
+  nav button{border:0;background:transparent;color:var(--ink-soft);font-family:inherit;font-weight:700;font-size:13.5px;padding:12px 13px;cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent}
+  nav button:hover{color:var(--ink)}
+  nav button.on{color:var(--ink);border-bottom-color:var(--amber)}
+  .help{background:var(--amber-soft);color:#8A4E12;font-size:12.5px;font-weight:600;padding:7px 18px;flex:0 0 auto;border-bottom:1px solid #F0CDA1}
+  .frameWrap{flex:1 1 auto;position:relative;background:var(--bg)}
+  iframe{position:absolute;inset:0;width:100%;height:100%;border:0;background:var(--bg)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">F</div>
+  <div>
+    <h1>Contabilidad Flores Salame</h1>
+    <div class="sub">🍋 Rancho · 🏍️ Moto Pro · 👤 Personal — RFC FOSA9208236K5</div>
+  </div>
+</header>
+<nav id="nav"></nav>
+<div class="help" id="help"></div>
+<div class="frameWrap"><iframe id="frame" title="módulo"></iframe></div>
+
+<script>
+const TABS=[
+  {id:'banco',    label:'🏦 Banco · multi-entidad', src:'contabilidad_flores.html',
+   help:'Estados de cuenta formales (BBVA Libretón, Banamex, tarjetas de crédito). Clasifica cada movimiento en Rancho / Moto Pro / Personal y exporta la póliza para COI.'},
+  {id:'bancomp',  label:'🏦 Banco · Moto Pro',      src:'contabilidad_motopro.html',
+   help:'Movimientos del mes de la cuenta BBVA de Moto Pro, agrupados por día. Clasifica y exporta pólizas.'},
+  {id:'ingresos', label:'📑 Ingresos (ventas)',     src:'polizas_motopro.html',
+   help:'Sube los XML de las facturas del día y genera la póliza de ingresos, con la fecha de depósito al día siguiente.'},
+  {id:'caja',     label:'🧾 Caja',                  src:'caja_motopro.html',
+   help:'Corte del día, vouchers, fichas de depósito y excedente de efectivo. Se carga desde el corte de SAIT.'},
+  {id:'concilia', label:'🔍 Conciliación fiscal',   src:'conciliacion_fiscal.html',
+   help:'Cruza el banco contra tus CFDIs de Siigo: te dice qué gasto tiene factura, qué IVA se acredita y qué REP falta. No genera póliza, verifica.'},
+  {id:'admin',    label:'📊 Admin',                 src:'admin_motopro.html',
+   help:'Conciliación administrativa de Moto Pro.'},
+];
+const nav=document.getElementById('nav'), frame=document.getElementById('frame'), help=document.getElementById('help');
+let actual=localStorage.getItem('cont_tab')||'banco';
+if(!TABS.some(t=>t.id===actual)) actual='banco';
+
+function pintarNav(){
+  nav.innerHTML=TABS.map(t=>`<button data-id="${t.id}" class="${t.id===actual?'on':''}">${t.label}</button>`).join('');
+  nav.querySelectorAll('button').forEach(b=>b.onclick=()=>ir(b.dataset.id));
+}
+function ir(id){
+  actual=id; localStorage.setItem('cont_tab',id);
+  const t=TABS.find(x=>x.id===id);
+  if(frame.getAttribute('src')!==t.src) frame.setAttribute('src',t.src);
+  help.textContent=t.help;
+  nav.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b.dataset.id===id));
+}
+pintarNav();
+ir(actual);
+</script>
+</body>
+</html>
