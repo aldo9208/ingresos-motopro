@@ -191,25 +191,27 @@ function headerCheques(rows){
   }
   return null;
 }
+const DFECHA_CHQ=/^\d{2}\/[A-Z]{3}\b/;
 function parseCheques(rows,txt){
   const my=txt.match(/AL\s+(\d{2})\/(\d{2})\/(\d{4})/); const year=my?+my[3]:new Date().getFullYear();
   const h=headerCheques(rows); if(!h) return [];
-  const cols=[['cargo',h.C],['abono',h.A],['saldo',h.O]];  // se asigna cada monto a la columna cuyo borde derecho esté más cerca
+  const cols=[['cargo',h.C],['abono',h.A],['saldo',h.O]];  // cada monto va a la columna cuyo borde derecho esté más cerca
   const out=[]; let m=null;
-  const dref=/^\d{2}\/[A-Z]{3}$/;
   for(const r of rows){
-    const t0=r.toks[0].s, esFecha=dref.test(t0) && r.toks[1] && dref.test(r.toks[1].s);
-    if(esFecha){
+    const t0=r.toks[0].s;
+    if(DFECHA_CHQ.test(t0)){   // pdf.js pega la 2a fecha con la descripción, por eso se detecta por "empieza con fecha"
       if(m) out.push(m);
-      const dd=+t0.slice(0,2), mm=MES[t0.slice(3)]||1;
-      const desc=[],nums=[];
-      for(const t of r.toks.slice(2)){
-        if(/^-?[\d,]+\.\d{2}$/.test(t.s)) nums.push(t); else if(t.xr<h.C-20) desc.push(t.s);
+      const md=t0.match(/^(\d{2})\/([A-Z]{3})/); const dd=+md[1], mm=MES[md[2]]||1;
+      const descToks=[], nums=[];
+      for(const t of r.toks){
+        if(/^-?[\d,]+\.\d{2}$/.test(t.s)) nums.push(t);
+        else if(t.xr<h.C-20) descToks.push(t);
       }
-      m={f:iso(year,mm,dd),origen:'cheques',d:desc.join(' '),ref:'',cargo:0,abono:0};
+      const d=descToks.map(t=>t.s).join(' ').replace(/^(\d{2}\/[A-Z]{3}\s*){1,2}/,'').trim();  // quita 1-2 fechas del inicio
+      m={f:iso(year,mm,dd),origen:'cheques',d,ref:'',cargo:0,abono:0};
       for(const n of nums){
         let best=cols[0], bd=Math.abs(n.xr-cols[0][1]);
-        for(const c of cols){ const d=Math.abs(n.xr-c[1]); if(d<bd){bd=d;best=c;} }
+        for(const c of cols){ const dd2=Math.abs(n.xr-c[1]); if(dd2<bd){bd=dd2;best=c;} }
         if(best[0]==='cargo') m.cargo=num(n.s); else if(best[0]==='abono') m.abono=num(n.s);
       }
       if(/SALDO ANTERIOR/.test(m.d)) m=null;
