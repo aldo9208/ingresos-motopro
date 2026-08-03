@@ -153,7 +153,7 @@ function iso(y,m,d){return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStar
 
 async function rowsDePagina(page){
   const tc=await page.getTextContent();
-  const toks=tc.items.map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5]})).filter(t=>t.s);
+  const toks=tc.items.map(i=>({s:i.str.trim(),x:i.transform[4],xr:i.transform[4]+(i.width||0),y:i.transform[5]})).filter(t=>t.s);
   toks.sort((a,b)=> b.y-a.y || a.x-b.x);
   const rows=[]; let cur=null;
   for(const t of toks){
@@ -178,28 +178,45 @@ function detecta(txt){
   return null;
 }
 
+function headerCheques(rows){
+  // Libretón 2.0: columnas CARGOS / ABONOS / OPERACIÓN(saldo) — se toma el borde DERECHO de cada una
+  for(const r of rows){
+    const h={};
+    for(const t of r.toks){ const u=t.s.toUpperCase();
+      if(u.startsWith('CARGOS')) h.C=t.xr;
+      else if(u.startsWith('ABONOS')) h.A=t.xr;
+      else if(u.startsWith('OPERACI')) h.O=t.xr;
+    }
+    if(h.C&&h.A&&h.O) return h;
+  }
+  return null;
+}
 function parseCheques(rows,txt){
   const my=txt.match(/AL\s+(\d{2})\/(\d{2})\/(\d{4})/); const year=my?+my[3]:new Date().getFullYear();
-  const hx=headerX(rows,['CARGOS','ABONOS','SALDO']); if(!hx) return [];
-  const b1=(hx['CARGOS']+hx['ABONOS'])/2, b2=(hx['ABONOS']+hx['SALDO'])/2;
+  const h=headerCheques(rows); if(!h) return [];
+  const cols=[['cargo',h.C],['abono',h.A],['saldo',h.O]];  // se asigna cada monto a la columna cuyo borde derecho esté más cerca
   const out=[]; let m=null;
+  const dref=/^\d{2}\/[A-Z]{3}$/;
   for(const r of rows){
-    const t0=r.toks[0].s, esFecha=/^\d{2}\/[A-Z]{3}$/.test(t0) && r.toks[1] && /^\d{2}\/[A-Z]{3}$/.test(r.toks[1].s);
+    const t0=r.toks[0].s, esFecha=dref.test(t0) && r.toks[1] && dref.test(r.toks[1].s);
     if(esFecha){
       if(m) out.push(m);
       const dd=+t0.slice(0,2), mm=MES[t0.slice(3)]||1;
       const desc=[],nums=[];
       for(const t of r.toks.slice(2)){
-        if(/^-?[\d,]+\.\d{2}$/.test(t.s)) nums.push(t); else if(t.x<hx['CARGOS']-8) desc.push(t.s);
+        if(/^-?[\d,]+\.\d{2}$/.test(t.s)) nums.push(t); else if(t.xr<h.C-20) desc.push(t.s);
       }
       m={f:iso(year,mm,dd),origen:'cheques',d:desc.join(' '),ref:'',cargo:0,abono:0};
-      for(const n of nums){ if(n.x<b1-30) m.cargo=num(n.s); else if(n.x<b2-20) m.abono=num(n.s); }
+      for(const n of nums){
+        let best=cols[0], bd=Math.abs(n.xr-cols[0][1]);
+        for(const c of cols){ const d=Math.abs(n.xr-c[1]); if(d<bd){bd=d;best=c;} }
+        if(best[0]==='cargo') m.cargo=num(n.s); else if(best[0]==='abono') m.abono=num(n.s);
+      }
       if(/SALDO ANTERIOR/.test(m.d)) m=null;
     } else if(m){
-      const linea=r.toks.filter(t=>t.x<hx['CARGOS']-8).map(t=>t.s).join(' ');
+      const linea=r.toks.filter(t=>t.xr<h.C-20).map(t=>t.s).join(' ');
       if(/TOTAL DE MOVIMIENTOS|TOTAL IMPORTE|GLOSARIO|CUADRO RESUMEN/i.test(linea)){out.push(m);m=null;continue}
       if(linea) m.ref=(m.ref+' '+linea).trim().slice(0,140);
-      for(const t of r.toks) if(/^-?[\d,]+\.\d{2}$/.test(t.s)){ if(t.x<b1-30&&!m.cargo) m.cargo=num(t.s); else if(t.x>=b1-30&&t.x<b2-20&&!m.abono) m.abono=num(t.s); }
     }
   }
   if(m) out.push(m);
