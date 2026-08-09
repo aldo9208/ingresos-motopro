@@ -82,6 +82,7 @@
     <div id="warn"></div>
     <div class="toolbar">
       <button id="btnXlsx">⬇ Descargar Excel de conciliación</button>
+      <button id="btnPolizasCOI" style="background:var(--rancho)">📥 Generar pólizas de banco para COI</button>
       <button class="ghost" id="btnLimpiar">🗑 Limpiar cargados</button>
       <button class="ghost" id="btnReset">Reiniciar mis reglas</button>
       <span class="muted" id="meta"></span>
@@ -484,7 +485,67 @@ inp.onchange=e=>handleFiles([...e.target.files]);
 drop.addEventListener('drop',e=>handleFiles([...e.dataTransfer.files]));
 document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('on'));t.classList.add('on');TAB=t.dataset.t;paint();});
+/* ===== MÓDULO: Generar pólizas de banco para COI (3 automáticas) ===== */
+/* Se agrega a conciliacion_fiscal.html. Genera Excel formato importación COI. */
+
+const CTA_COI = {
+  banco:'1120-001-0001', com_terminal:'7100-004-0001', iva_gasto:'1191-001-0002',
+  prov_bbva:'2110-002-0001', gasto_personal:'6000-030-0003',
+  tdc:{'4792':'2114-001-0004','7110':'2114-001-0011'}
+};
+const CC_COI = {MotoPro:'1', Rancho:'2', Personal:'', Compartido:'', Financiero:'', Traspaso:'', Revisar:''};
+
+function fechaCOI(iso){ // 2026-08-06 -> 06/08/2026
+  const p=(iso||'').split('-'); return p.length===3 ? `${p[2]}/${p[1]}/${p[0]}` : iso;
+}
+function baseIva(total){ const base=Math.round(total/1.16*100)/100; return [base, Math.round((total-base)*100)/100]; }
+
+/* Detecta y genera las 3 pólizas automáticas desde los movimientos del banco */
+function generarPolizasBanco(){
+  const pols=[];
+  for(const m of BANK){
+    const d=m.desc.toUpperCase(); const cc=CC_COI[entBancoMov(m)]||'';
+    const monto=Math.abs(m.importe); const fe=fechaCOI(m.fecha);
+    if(m.importe>=0) continue; // solo cargos (salidas) para estas 3 reglas
+    if(/COMISION|COM SERV|IVA COM SERV|COM\. DE TERMINAL/.test(d)){
+      const [base,iva]=baseIva(monto);
+      pols.push({tipo:'Eg',fecha:fe,cc,concepto:'COMISION BANCARIA '+m.fecha,parts:[
+        [CTA_COI.com_terminal,base,0],[CTA_COI.iva_gasto,iva,0],[CTA_COI.banco,0,monto],
+        [CTA_COI.prov_bbva,monto,0],[CTA_COI.prov_bbva,0,monto]]});
+    } else if(/RETIRO CAJERO|CAFET|OXXO|CHEDRAUI|GASTO PERSONAL|PATY LIZ/.test(d)){
+      pols.push({tipo:'Eg',fecha:fe,cc,concepto:m.desc.slice(0,40),parts:[
+        [CTA_COI.gasto_personal,monto,0],[CTA_COI.banco,0,monto]]});
+    } else if(/PAGO TARJETA DE CREDITO|PAGO A TARJETA/.test(d)){
+      const mm=d.match(/(\d{4})(?!.*\d{4})/); const ult4=mm?mm[1]:'4792';
+      const cta=CTA_COI.tdc[ult4]||CTA_COI.tdc['4792'];
+      pols.push({tipo:'Eg',fecha:fe,cc,concepto:'PAGO TARJETA CREDITO #'+ult4,parts:[
+        [cta,monto,0],[CTA_COI.banco,0,monto]]});
+    }
+  }
+  return pols;
+}
+
+function exportarPolizasCOI(){
+  const pols=generarPolizasBanco();
+  if(!pols.length){ alert('No se detectaron movimientos de comisión, gasto personal o pago de tarjeta en el banco cargado.'); return; }
+  const wb=XLSX.utils.book_new();
+  const rows=[['Tipo','Numero','Fecha','Cuenta','Concepto','Debe','Haber','CentroCostos']];
+  let descuadre=0;
+  for(const p of pols){
+    let dd=0,hh=0;
+    for(const [cta,d,h] of p.parts){ rows.push([p.tipo,'',p.fecha,cta,p.concepto,d||'',h||'',p.cc]); dd+=d; hh+=h; }
+    if(Math.abs(dd-hh)>0.02) descuadre++;
+    rows.push(['FIN_PARTIDAS','','','','','','','']);
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  XLSX.utils.book_append_sheet(wb,ws,'Polizas');
+  // guardar como xls (97-2003) que COI prefiere
+  XLSX.writeFile(wb,'Polizas_Banco_COI.xls',{bookType:'biff8'});
+  alert(`Generadas ${pols.length} pólizas de banco para COI.${descuadre?' ⚠ '+descuadre+' descuadradas, revisar.':' Todas cuadran.'}`);
+}
+
 $('#btnXlsx').onclick=exportXlsx;
+$('#btnPolizasCOI').onclick=exportarPolizasCOI;
 $('#btnReset').onclick=resetReglas;
 $('#btnLimpiar').onclick=()=>{
   if(!confirm('¿Quitar todos los CFDIs, REP y el banco cargados? (Tus reglas de clasificación se conservan.)'))return;
