@@ -503,17 +503,43 @@ function baseIva(total){ const base=Math.round(total/1.16*100)/100; return [base
 /* Detecta y genera las 3 pólizas automáticas desde los movimientos del banco */
 function generarPolizasBanco(){
   const pols=[];
-  for(const m of BANK){
-    const d=m.desc.toUpperCase(); const cc=CC_COI[entBancoMov(m)]||'';
-    const monto=Math.abs(m.importe); const fe=fechaCOI(m.fecha);
-    if(m.importe>=0) continue; // solo cargos (salidas) para estas 3 reglas
-    if(/COMISION|COM SERV|IVA COM SERV|COM\. DE TERMINAL/.test(d)){
+  // 1) COMISIONES DE TERMINAL: se agrupan POR DÍA (comisión "APLI TASA" + su IVA "IVA TASA"), como Adry
+  const porDia={};  // {fecha: {base, iva, cc}}
+  const usados=new Set();
+  for(let k=0;k<BANK.length;k++){
+    const m=BANK[k];
+    if(m.importe>=0) continue;
+    const d=m.desc.toUpperCase(); const monto=Math.abs(m.importe);
+    const esComIVA = /IVA TASA DE DESC|IVA COM SERV/.test(d);           // el IVA de la comisión
+    const esComBase= /APLI TASA DE DES|COM\. DE TERMINAL|SERV BANCA|COM SERV BCA/.test(d) && !esComIVA; // la comisión
+    const esComGen = /COMISION|COM SERV/.test(d) && !esComIVA && !esComBase; // comisión genérica (con IVA incluido)
+    if(esComIVA||esComBase){
+      const f=m.fecha; if(!porDia[f]) porDia[f]={base:0,iva:0,cc:CC_COI[entBancoMov(m)]||''};
+      if(esComIVA) porDia[f].iva+=monto; else porDia[f].base+=monto;
+      usados.add(k);
+    } else if(esComGen){
+      // comisión que trae IVA incluido: desglosar
       const [base,iva]=baseIva(monto);
-      pols.push({tipo:'Eg',fecha:fe,cc,concepto:'COMISION BANCARIA '+m.fecha,parts:[
-        [CTA_COI.com_terminal,base,0],[CTA_COI.iva_gasto,iva,0],[CTA_COI.banco,0,monto],
-        [CTA_COI.prov_bbva,monto,0],[CTA_COI.prov_bbva,0,monto]]});
-    } else if(/RETIRO CAJERO|CAFET|OXXO|CHEDRAUI|GASTO PERSONAL|PATY LIZ/.test(d)){
-      pols.push({tipo:'Eg',fecha:fe,cc,concepto:m.desc.slice(0,40),parts:[
+      const f=m.fecha; if(!porDia[f]) porDia[f]={base:0,iva:0,cc:CC_COI[entBancoMov(m)]||''};
+      porDia[f].base+=base; porDia[f].iva+=iva; usados.add(k);
+    }
+  }
+  // crear 1 póliza de comisión por día
+  for(const f of Object.keys(porDia).sort()){
+    const {base,iva,cc}=porDia[f]; const total=Math.round((base+iva)*100)/100;
+    if(total<=0) continue;
+    const b=Math.round(base*100)/100, i2=Math.round(iva*100)/100;
+    pols.push({tipo:'Eg',fecha:fechaCOI(f),cc,concepto:'COMISION BANCARIA COBRADA DEL DIA '+f,parts:[
+      [CTA_COI.com_terminal,b,0],[CTA_COI.iva_gasto,i2,0],[CTA_COI.banco,0,total],
+      [CTA_COI.prov_bbva,total,0],[CTA_COI.prov_bbva,0,total]]});
+  }
+  // 2) GASTO PERSONAL y 3) PAGO TDC (individuales, no agrupados)
+  for(let k=0;k<BANK.length;k++){
+    if(usados.has(k)) continue;
+    const m=BANK[k]; if(m.importe>=0) continue;
+    const d=m.desc.toUpperCase(); const cc=CC_COI[entBancoMov(m)]||''; const monto=Math.abs(m.importe); const fe=fechaCOI(m.fecha);
+    if(/RETIRO CAJERO|CAFET|OXXO|CHEDRAUI|GASTO PERSONAL|PATY LIZ/.test(d)){
+      pols.push({tipo:'Eg',fecha:fe,cc,concepto:m.desc.slice(0,60),parts:[
         [CTA_COI.gasto_personal,monto,0],[CTA_COI.banco,0,monto]]});
     } else if(/PAGO TARJETA DE CREDITO|PAGO A TARJETA/.test(d)){
       const mm=d.match(/(\d{4})(?!.*\d{4})/); const ult4=mm?mm[1]:'4792';
