@@ -550,8 +550,8 @@ function exportarPolizasCOI(){
   }
   const ws=XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb,ws,'Polizas');
-  // guardar como xls (97-2003) que COI prefiere
-  XLSX.writeFile(wb,'Polizas_Banco_COI.xls',{bookType:'biff8'});
+  // guardar como .xlsx (formato validado que COI importa sin error de departamento)
+  XLSX.writeFile(wb,'Polizas_Banco_COI.xlsx',{bookType:'xlsx'});
   alert(`Generadas ${pols.length} pólizas de banco para COI.${descuadre?' ⚠ '+descuadre+' descuadradas, revisar.':' Todas cuadran.'}`);
 }
 
