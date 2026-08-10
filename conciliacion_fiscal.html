@@ -540,8 +540,9 @@ function exportarPolizasCOI(){
     let dd=0,hh=0;
     const dia=String(parseInt((p.fecha||'').split('/')[0],10)||1);   // solo el número del día
     rows.push([p.tipo, '', p.concepto+' '+p.fecha, dia, '', '', '', '', '']);   // encabezado
-    const dep = p.cc || '1';  // COI exige número de departamento en cada partida
-    for(const [cta,d,h] of p.parts){ rows.push(['',cta,dep,p.concepto,1,d||'',h||'',p.cc,'']); dd+=d; hh+=h; }  // partidas
+    // Adry: Departamento(C) VACÍO, Centro de costos(H) = el número (1=MotoPro,2=Rancho). Debe=F, Haber=G.
+    const cco = p.cc || '1';
+    for(const [cta,d,h] of p.parts){ rows.push(['',cta,null,p.concepto,1,d||'',h||'',cco,null]); dd+=d; hh+=h; }  // partidas
     if(Math.abs(dd-hh)>0.02) descuadre++;
     rows.push(['','FIN_PARTIDAS']);
   }
