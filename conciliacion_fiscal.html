@@ -489,7 +489,7 @@ document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
 /* Se agrega a conciliacion_fiscal.html. Genera Excel formato importación COI. */
 
 const CTA_COI = {
-  banco:'1120-001-0001', com_terminal:'7100-004-0001', iva_gasto:'1191-001-0002',
+  banco:'1120-001-0001', caja:'1110-001-0001', com_terminal:'7100-004-0001', iva_gasto:'1191-001-0002',
   prov_bbva:'2110-002-0001', gasto_personal:'6000-030-0003',
   tdc:{'4792':'2114-001-0004','7110':'2114-001-0011'}
 };
@@ -547,6 +547,23 @@ function generarPolizasBanco(){
       pols.push({tipo:'Eg',fecha:fe,cc,concepto:'PAGO TARJETA CREDITO #'+ult4,parts:[
         [cta,monto,0],[CTA_COI.banco,0,monto]]});
     }
+  }
+  // 4) DEPÓSITOS EN EFECTIVO: traspaso Caja -> Banco (póliza Dr), agrupados por día (como Adry)
+  const depDia={};
+  for(const m of BANK){
+    if(m.importe<=0) continue;  // depósitos son ABONOS (positivos)
+    const d=m.desc.toUpperCase();
+    if(/DEPOSITO EN EFECTIVO/.test(d)){
+      const f=m.fecha; if(!depDia[f]) depDia[f]={total:0,cc:CC_COI[entBancoMov(m)]||''};
+      depDia[f].total+=m.importe;
+    }
+  }
+  for(const f of Object.keys(depDia).sort()){
+    const {total,cc}=depDia[f]; const t=Math.round(total*100)/100;
+    if(t<=0) continue;
+    pols.push({tipo:'Dr',fecha:fechaCOI(f),cc,concepto:'DEPOSITO DE VENTAS EN EFECTIVO DEL DIA '+f,parts:[
+      [CTA_COI.caja,0,t],       // ABONO Caja (sale de caja)
+      [CTA_COI.banco,t,0]]});   // CARGO Banco (entra al banco)
   }
   return pols;
 }
