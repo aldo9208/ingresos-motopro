@@ -529,18 +529,20 @@ function exportarPolizasCOI(){
   const pols=generarPolizasBanco();
   if(!pols.length){ alert('No se detectaron movimientos de comisión, gasto personal o pago de tarjeta en el banco cargado.'); return; }
   const wb=XLSX.utils.book_new();
-  // Formato exacto de las plantillas de COI: encabezados (2 filas) + tipo en fila cabecera + cuentas en col B + FIN_PARTIDAS en col B
+  // FORMATO OFICIAL (Poliza modelo.xlsx): encabezado A=Tipo,C=Concepto,D=Día(solo número).
+  // Partida: B=Cuenta,C=Depto,D=Concepto,E=TipoCambio(1),F=Debe,G=Haber,H=CentroCostos. Cierre B=FIN_PARTIDAS
   const rows=[
-    ['Tipo Pol','Concepto póliza','','Póliza importada','','','','Aspel - COI'],
-    ['','No. Cuenta','Depto.','Concepto mov.','Debe','Haber','Centro de Ctos','Proyecto']
+    ['Tipo Pol','Núm. Póliza','Concepto póliza','Día','','Póliza importada','','','Aspel-COI'],
+    ['','No. Cuenta','Depto.','Concepto mov.','Tipo de Cambio','Debe','Haber','Centro de Ctos','Proyecto']
   ];
   let descuadre=0;
   for(const p of pols){
     let dd=0,hh=0;
-    rows.push([p.tipo, p.concepto+' '+p.fecha, '', '', '', '', '', '']);
-    for(const [cta,d,h] of p.parts){ rows.push(['',cta,'',p.concepto+' '+p.fecha,d||'',h||'',p.cc,'']); dd+=d; hh+=h; }
+    const dia=String(parseInt((p.fecha||'').split('/')[0],10)||1);   // solo el número del día
+    rows.push([p.tipo, '', p.concepto+' '+p.fecha, dia, '', '', '', '', '']);   // encabezado
+    for(const [cta,d,h] of p.parts){ rows.push(['',cta,'',p.concepto,1,d||'',h||'',p.cc,'']); dd+=d; hh+=h; }  // partidas
     if(Math.abs(dd-hh)>0.02) descuadre++;
-    rows.push(['','FIN_PARTIDAS','','','','','','']);
+    rows.push(['','FIN_PARTIDAS']);
   }
   const ws=XLSX.utils.aoa_to_sheet(rows);
   XLSX.utils.book_append_sheet(wb,ws,'Polizas');
