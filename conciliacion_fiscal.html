@@ -82,6 +82,9 @@
     <div id="warn"></div>
     <div class="toolbar">
       <button id="btnXlsx">⬇ Descargar Excel de conciliación</button>
+      <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;color:#555">
+        📅 Generar desde: <input type="date" id="fechaCorte" style="padding:4px 6px;border:1px solid #ccc;border-radius:5px;font-size:13px">
+      </label>
       <button id="btnPolizasCOI" style="background:var(--rancho)">📥 Generar pólizas de banco para COI</button>
       <button class="ghost" id="btnLimpiar">🗑 Limpiar cargados</button>
       <button class="ghost" id="btnReset">Reiniciar mis reglas</button>
@@ -502,6 +505,10 @@ function baseIva(total){ const base=Math.round(total/1.16*100)/100; return [base
 
 /* Detecta y genera las 3 pólizas automáticas desde los movimientos del banco */
 function generarPolizasBanco(){
+  // Fecha de corte: solo generar movimientos EN o DESPUÉS de esta fecha (evita duplicar lo ya capturado en COI)
+  const corteEl=document.getElementById('fechaCorte');
+  const corte=corteEl && corteEl.value ? corteEl.value : null;  // YYYY-MM-DD
+  const pasaCorte=(fecha)=> !corte || fecha>=corte;   // fecha del banco es YYYY-MM-DD; comparar texto funciona
   const pols=[];
   // 1) COMISIONES DE TERMINAL: se agrupan POR DÍA (comisión "APLI TASA" + su IVA "IVA TASA"), como Adry
   const porDia={};  // {fecha: {base, iva, cc}}
@@ -509,6 +516,7 @@ function generarPolizasBanco(){
   for(let k=0;k<BANK.length;k++){
     const m=BANK[k];
     if(m.importe>=0) continue;
+    if(!pasaCorte(m.fecha)) continue;
     const d=m.desc.toUpperCase(); const monto=Math.abs(m.importe);
     const esComIVA = /IVA TASA DE DESC|IVA COM SERV/.test(d);           // el IVA de la comisión
     const esComBase= /APLI TASA DE DES|COM\. DE TERMINAL|SERV BANCA|COM SERV BCA/.test(d) && !esComIVA; // la comisión
@@ -537,6 +545,7 @@ function generarPolizasBanco(){
   for(let k=0;k<BANK.length;k++){
     if(usados.has(k)) continue;
     const m=BANK[k]; if(m.importe>=0) continue;
+    if(!pasaCorte(m.fecha)) continue;
     const d=m.desc.toUpperCase(); const cc=CC_COI[entBancoMov(m)]||''; const monto=Math.abs(m.importe); const fe=fechaCOI(m.fecha);
     if(/RETIRO CAJERO|CAFET|OXXO|CHEDRAUI|GASTO PERSONAL|PATY LIZ/.test(d)){
       pols.push({tipo:'Eg',fecha:fe,cc,concepto:m.desc.slice(0,60),parts:[
@@ -552,6 +561,7 @@ function generarPolizasBanco(){
   const depDia={};
   for(const m of BANK){
     if(m.importe<=0) continue;  // depósitos son ABONOS (positivos)
+    if(!pasaCorte(m.fecha)) continue;
     const d=m.desc.toUpperCase();
     if(/DEPOSITO EN EFECTIVO/.test(d)){
       const f=m.fecha; if(!depDia[f]) depDia[f]={total:0,cc:CC_COI[entBancoMov(m)]||''};
