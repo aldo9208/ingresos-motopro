@@ -557,23 +557,28 @@ function generarPolizasBanco(){
         [cta,monto,0],[CTA_COI.banco,0,monto]]});
     }
   }
-  // 4) DEPÓSITOS EN EFECTIVO: traspaso Caja -> Banco (póliza Dr), agrupados por día (como Adry)
+  // 4) DEPÓSITOS EN EFECTIVO: traspaso Caja -> Banco (póliza Dr por día),
+  //    con un asiento (abono Caja / cargo Banco) por CADA depósito del día
   const depDia={};
   for(const m of BANK){
     if(m.importe<=0) continue;  // depósitos son ABONOS (positivos)
     if(!pasaCorte(m.fecha)) continue;
     const d=m.desc.toUpperCase();
     if(/DEPOSITO EN EFECTIVO/.test(d)){
-      const f=m.fecha; if(!depDia[f]) depDia[f]={total:0,cc:CC_COI[entBancoMov(m)]||''};
-      depDia[f].total+=m.importe;
+      const f=m.fecha; if(!depDia[f]) depDia[f]={montos:[],cc:CC_COI[entBancoMov(m)]||''};
+      depDia[f].montos.push(Math.round(m.importe*100)/100);
     }
   }
   for(const f of Object.keys(depDia).sort()){
-    const {total,cc}=depDia[f]; const t=Math.round(total*100)/100;
-    if(t<=0) continue;
-    pols.push({tipo:'Dr',fecha:fechaCOI(f),cc,concepto:'DEPOSITO DE VENTAS EN EFECTIVO DEL DIA '+f,parts:[
-      [CTA_COI.caja,0,t],       // ABONO Caja (sale de caja)
-      [CTA_COI.banco,t,0]]});   // CARGO Banco (entra al banco)
+    const {montos,cc}=depDia[f];
+    const parts=[];
+    montos.forEach(t=>{
+      if(t<=0) return;
+      parts.push([CTA_COI.caja,0,t]);     // ABONO Caja (sale de caja)
+      parts.push([CTA_COI.banco,t,0]);    // CARGO Banco (entra al banco)
+    });
+    if(!parts.length) continue;
+    pols.push({tipo:'Dr',fecha:fechaCOI(f),cc,concepto:'DEPOSITO DE VENTAS EN EFECTIVO DEL DIA '+f,parts});
   }
   return pols;
 }
