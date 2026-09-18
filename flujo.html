@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flujo de efectivo · Moto Pro y Ranchos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --papel:#F4F7F2; --regla:#DCE3D8; --tinta:#1B2420; --gris:#5F6B64;
+  --lima:#2E6E3C; --lima-suave:#E3EFE4; --rojo:#B5372A; --rojo-suave:#F6E3DF;
+  --ambar:#9A6A12; --ambar-suave:#F5EBD3; --blanco:#FFFFFF;
+}
+*{box-sizing:border-box}
+html{font-size:16px}
+body{margin:0;background:var(--papel);color:var(--tinta);font-family:"IBM Plex Sans",system-ui,sans-serif;line-height:1.45;font-variant-numeric:tabular-nums}
+main{max-width:760px;margin:0 auto;padding:20px 16px 80px}
+h1{font-size:1.35rem;font-weight:600;margin:0 0 2px;letter-spacing:-.01em}
+.sub{color:var(--gris);font-size:.9rem;margin:0 0 20px}
+h2{font-size:1.05rem;font-weight:600;margin:32px 0 10px;padding-top:14px;border-top:2px solid var(--tinta)}
+p{margin:0 0 10px}
+button{font:inherit;cursor:pointer;border:1px solid var(--tinta);background:var(--blanco);color:var(--tinta);border-radius:6px;padding:7px 12px}
+button.primario{background:var(--tinta);color:var(--blanco)}
+button.chico{padding:3px 8px;font-size:.85rem}
+button.quieto{border-color:var(--regla);color:var(--gris)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #8FB89A;outline-offset:1px}
+input,select{font:inherit;color:var(--tinta);background:var(--blanco);border:1px solid var(--regla);border-radius:6px;padding:6px 8px;min-width:0}
+input[type=number]{text-align:right;width:8.5em}
+input[type=date]{width:9.5em}
+input.nombre{width:100%}
+.fila{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.acciones{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+
+/* Respuesta */
+.respuesta{background:var(--blanco);border:1px solid var(--regla);border-left:6px solid var(--lima);border-radius:8px;padding:16px 18px;margin:0 0 18px;font-size:1.05rem}
+.respuesta.rojo{border-left-color:var(--rojo)}
+.respuesta strong{font-weight:600}
+.respuesta .monto{font-size:1.8rem;font-weight:600;letter-spacing:-.02em;display:block;margin:2px 0 6px}
+.respuesta .monto.neg{color:var(--rojo)}
+.respuesta small{color:var(--gris);font-size:.88rem;display:block}
+
+/* Gráfica */
+.grafica{background:var(--blanco);border:1px solid var(--regla);border-radius:8px;padding:10px 8px 4px}
+.grafica svg{width:100%;height:auto;display:block}
+.grafica text{font-family:inherit;font-size:11px;fill:var(--gris)}
+.grafica .val{font-size:10px;fill:var(--tinta)}
+.grafica .pared{fill:var(--rojo);font-weight:600}
+
+/* Tabla de semanas */
+table{width:100%;border-collapse:collapse;background:var(--blanco);border:1px solid var(--regla);border-radius:8px;overflow:hidden}
+th,td{padding:9px 8px;text-align:right;border-bottom:1px solid var(--regla);vertical-align:top}
+th{font-weight:500;color:var(--gris);font-size:.85rem;text-align:right}
+th:first-child,td:first-child{text-align:left}
+tr.sem{cursor:pointer}
+tr.sem:hover td{background:#FAFBF9}
+tr.sem td.saldo{font-weight:600}
+tr.sem.neg td.saldo{color:var(--rojo)}
+tr.sem.min td:first-child::after{content:" mínimo";font-size:.75rem;color:var(--rojo);font-weight:500}
+tr.det{display:none}
+tr.det.abierto{display:table-row}
+tr.det td{padding:4px 8px 14px;background:#FAFBF9}
+.detalle{display:grid;grid-template-columns:1fr auto;gap:2px 16px;font-size:.9rem}
+.detalle .cab{color:var(--gris);margin-top:6px;grid-column:1/-1;font-size:.8rem}
+.detalle .ent{color:var(--lima)}
+.detalle .sal{color:var(--tinta)}
+.detalle .hip{color:var(--ambar);font-style:italic}
+.detalle input{width:7.5em;padding:2px 6px;font-size:.9rem}
+.fecha{color:var(--gris);font-size:.85rem;display:block}
+
+/* Listas editables */
+.lista{background:var(--blanco);border:1px solid var(--regla);border-radius:8px}
+.item{display:grid;grid-template-columns:1fr auto;gap:6px 10px;padding:10px 12px;border-bottom:1px solid var(--regla);align-items:center}
+.item:last-child{border-bottom:0}
+.item .campos{display:flex;gap:6px;flex-wrap:wrap;align-items:center;grid-column:1/-1}
+.item .campos label{font-size:.8rem;color:var(--gris);display:flex;flex-direction:column;gap:2px}
+.item .borrar{color:var(--rojo);border-color:transparent;background:transparent;padding:2px 6px}
+.etiq{font-size:.75rem;padding:1px 7px;border-radius:10px;background:var(--lima-suave);color:var(--lima)}
+.etiq.hip{background:var(--ambar-suave);color:var(--ambar)}
+.etiq.fuera{background:#EEF0EC;color:var(--gris)}
+.nota{color:var(--gris);font-size:.85rem}
+.escenario{display:flex;gap:6px;flex-wrap:wrap}
+.escenario label{border:1px solid var(--regla);border-radius:6px;padding:6px 10px;background:var(--blanco);display:flex;gap:6px;align-items:center;cursor:pointer}
+.escenario label:has(input:checked){border-color:var(--tinta);background:var(--tinta);color:var(--blanco)}
+.escenario input{accent-color:var(--lima)}
+.ajustes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
+.ajustes label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--gris)}
+.guardado{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--tinta);color:var(--blanco);padding:8px 14px;border-radius:20px;font-size:.85rem;opacity:0;transition:opacity .2s;pointer-events:none}
+.guardado.ver{opacity:1}
+@media (prefers-reduced-motion:reduce){.guardado{transition:none}}
+@media (max-width:480px){
+  th,td{padding:8px 6px;font-size:.92rem}
+  input[type=number]{width:7em}
+}
+</style>
+</head>
+<body>
+<main>
+  <h1>Flujo de efectivo</h1>
+  <p class="sub">Moto Pro y Ranchos · 13 semanas · todo el dinero real, no solo lo fiscal</p>
+
+  <div id="respuesta" class="respuesta"></div>
+  <div class="grafica"><svg id="svg" viewBox="0 0 720 220" role="img" aria-label="Saldo proyectado por semana"></svg></div>
+
+  <h2>Escenario Yanga · cuota 2 del 21 de septiembre</h2>
+  <div class="escenario" id="escenario"></div>
+  <p class="nota" id="yangaNota"></p>
+
+  <h2>Semana por semana</h2>
+  <p class="nota">Toca una semana para ver el detalle y corregir las entradas de esa semana.</p>
+  <table id="tabla"><thead><tr><th>Semana</th><th>Entra</th><th>Sale</th><th>Saldo</th></tr></thead><tbody></tbody></table>
+
+  <h2>Cobros pendientes de limón</h2>
+  <p class="nota">Facturas emitidas que aún no entran al banco. Limones Mónica paga en unos 8 días.</p>
+  <div class="lista" id="cobros"></div>
+  <div class="acciones"><button class="chico" onclick="agregar('cobros')">Agregar cobro</button></div>
+
+  <h2>Vencimientos con fecha</h2>
+  <p class="nota">Pagos únicos. Marca como hipotético lo que aún no es compromiso para ver cómo movería el mínimo.</p>
+  <div class="lista" id="puntuales"></div>
+  <div class="acciones"><button class="chico" onclick="agregar('puntuales')">Agregar vencimiento</button></div>
+
+  <h2>Pagos recurrentes</h2>
+  <div class="lista" id="recurrentes"></div>
+  <div class="acciones"><button class="chico" onclick="agregar('recurrentes')">Agregar recurrente</button></div>
+
+  <h2>Ajustes</h2>
+  <div class="ajustes">
+    <label>Saldo real hoy (BBVA + caja + bolsa)<input type="number" id="saldo" step="0.01"></label>
+    <label>Fecha del saldo<input type="date" id="fechaSaldo"></label>
+    <label>Colchón que no quieres tocar<input type="number" id="colchon" step="1000"></label>
+    <label>Moto Pro al banco por semana (default)<input type="number" id="motopro" step="500"></label>
+    <label>Limón facturado por semana (default)<input type="number" id="limon" step="500"></label>
+  </div>
+  <div class="acciones">
+    <button onclick="exportar()">Exportar respaldo</button>
+    <button onclick="document.getElementById('archivo').click()">Importar respaldo</button>
+    <input type="file" id="archivo" accept="application/json" hidden onchange="importar(this)">
+    <button class="quieto" onclick="restablecer()">Volver a los datos iniciales</button>
+  </div>
+  <p class="nota">Los cambios se guardan en este navegador. Exporta un respaldo si vas a cambiar de teléfono.</p>
+</main>
+<div id="guardado" class="guardado">Guardado</div>
+
+<script>
+// ---------- Datos iniciales (10 sep 2026) ----------
+const DEFAULT = {
+  saldo: 75808, fechaSaldo: '2026-09-07', colchon: 30000,
+  motoproSemanal: 34000, limonSemanal: 35000,
+  yanga: 'interes', yangaCustom: 150000,
+  // overrides por semana. Las dos primeras semanas solo cobran facturas ya emitidas (lista de cobros); el limón nuevo entra desde el 21.
+  semanas: {'2026-09-07':{limon:0}, '2026-09-14':{limon:0},
+            '2026-10-05':{limon:40000}, '2026-10-12':{limon:40000}, '2026-10-19':{limon:40000}, '2026-10-26':{limon:40000},
+            '2026-11-02':{limon:45000}, '2026-11-09':{limon:50000}, '2026-11-16':{limon:50000}, '2026-11-23':{limon:50000}, '2026-11-30':{limon:50000}},
+  cobros: [
+    {id:1, nombre:'Limones Mónica F/26002-26004 (25 y 28 ago)', monto:54710, fecha:'2026-09-10'},
+    {id:2, nombre:'Limones Mónica F/26005-26007 (3 sep)', monto:33020, fecha:'2026-09-14'},
+    {id:3, nombre:'Limones Mónica F/26008 (7 sep)', monto:11537.5, fecha:'2026-09-16'},
+  ],
+  puntuales: [
+    {id:1, nombre:'Tarjeta Negocios · pago mínimo', monto:25792, fecha:'2026-09-14', hip:false},
+    {id:2, nombre:'Yanga 2700005286 · cuota 2', monto:244928.11, fecha:'2026-09-21', hip:false, yanga:true},
+    {id:3, nombre:'Tarjeta crédito 4792', monto:37000, fecha:'2026-09-30', hip:false},
+    {id:4, nombre:'Refaccionaria Top Car', monto:6351, fecha:'2026-10-08', hip:false},
+    {id:5, nombre:'MRM · pedido ~160k (1 mes de crédito)', monto:160000, fecha:'2026-10-12', hip:false},
+    {id:6, nombre:'Servicio Agrotécnico (vencida)', monto:51085.4, fecha:'2026-11-06', hip:false},
+    {id:7, nombre:'Servicio La Barda Blanca (vencida)', monto:12495.65, fecha:'2026-11-06', hip:false},
+    {id:8, nombre:'Reposición inventario Moto Pro', monto:80000, fecha:'2026-11-25', hip:true},
+    {id:9, nombre:'Yanga 2700005642 · cuota 2 (fuera del horizonte)', monto:609033.33, fecha:'2027-02-20', hip:false},
+  ],
+  recurrentes: [
+    {id:1, nombre:'Nómina Moto Pro', monto:4277.78, tipo:'semanal', dia:5},
+    {id:2, nombre:'Nómina rancho (Gonzalo)', monto:2381.04, tipo:'semanal', dia:5},
+    {id:3, nombre:'Combustible Barda Blanca', monto:2300, tipo:'semanal', dia:5},
+    {id:4, nombre:'Compras menores Moto Pro', monto:5000, tipo:'semanal', dia:3},
+    {id:5, nombre:'Renta local Moto Pro', monto:20880, tipo:'mensual', dia:15},
+    {id:6, nombre:'Telmex Moto Pro', monto:549, tipo:'mensual', dia:5},
+    {id:7, nombre:'Telmex casa', monto:604, tipo:'mensual', dia:15},
+    {id:8, nombre:'IMSS', monto:4957, tipo:'mensual', dia:17},
+    {id:9, nombre:'Tarjeta Negocios · mínimo (desde oct)', monto:30500, tipo:'mensual', dia:14, desde:'2026-10-01'},
+    {id:10, nombre:'Tarjeta crédito 4792 · pago (desde oct)', monto:15000, tipo:'mensual', dia:30, desde:'2026-10-01'},
+    {id:11, nombre:'Infonavit', monto:9194, tipo:'bimestral', dia:17, desde:'2026-09-01'},
+    {id:12, nombre:'Luz Moto Pro', monto:1800, tipo:'bimestral', dia:1, desde:'2026-10-01'},
+  ],
+};
+const YANGA = {
+  completa: {t:'Cuota completa', m:244928.11, n:'$156,262 de capital + $88,666 de interés, como está en la tabla de amortización.'},
+  interes:  {t:'Solo interés', m:88665.84, n:'Pagar los $88,666 de interés y diferir el capital a la cuota de mayo. Requiere acuerdo con Yanga antes del 21.'},
+  custom:   {t:'Interés + capital parcial', m:null, n:'Interés más el capital que alcances. Ajusta el monto abajo.'},
+};
+
+// ---------- Estado ----------
+const CLAVE = 'flujo_motopro_ranchos_v1';
+let D = cargar();
+function cargar(){ try{ const s=localStorage.getItem(CLAVE); if(s) return JSON.parse(s);}catch(e){} return JSON.parse(JSON.stringify(DEFAULT)); }
+let tGuardado;
+function guardar(){ localStorage.setItem(CLAVE, JSON.stringify(D)); const g=document.getElementById('guardado'); g.classList.add('ver'); clearTimeout(tGuardado); tGuardado=setTimeout(()=>g.classList.remove('ver'),900); }
+
+// ---------- Fechas ----------
+const iso = d => d.toISOString().slice(0,10);
+const parse = s => { const [y,m,dd]=s.split('-').map(Number); return new Date(Date.UTC(y,m-1,dd)); };
+const addDias = (d,n) => new Date(d.getTime()+n*86400000);
+const lunes = d => addDias(d, -((d.getUTCDay()+6)%7));
+const MESES=['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+const fmtF = d => `${d.getUTCDate()} ${MESES[d.getUTCMonth()]}`;
+const fmtM = n => (n<0?'−':'')+'$'+Math.round(Math.abs(n)).toLocaleString('es-MX');
+const ultimoDia = (y,m) => new Date(Date.UTC(y,m+1,0)).getUTCDate();
+
+// ---------- Cálculo ----------
+function ocurrenciasRecurrente(r, a, b){ // fechas dentro de [a,b]
+  const out=[]; const desde = r.desde ? parse(r.desde) : null;
+  if(r.tipo==='semanal'){
+    for(let d=a; d<=b; d=addDias(d,1)){ const wd=(d.getUTCDay()+6)%7+1; if(wd===Number(r.dia)) out.push(d); }
+  } else {
+    const paso = r.tipo==='bimestral'?2:1;
+    let y=a.getUTCFullYear(), m=a.getUTCMonth();
+    for(let k=0;k<3;k++){
+      const mm=m+k, yy=y+Math.floor(mm/12), mo=((mm%12)+12)%12;
+      if(r.tipo==='bimestral' && desde){ const dm=(yy-desde.getUTCFullYear())*12+(mo-desde.getUTCMonth()); if(dm<0||dm%paso!==0) continue; }
+      const dia=Math.min(Number(r.dia), ultimoDia(yy,mo));
+      const d=new Date(Date.UTC(yy,mo,dia)); if(d>=a&&d<=b) out.push(d);
+    }
+  }
+  return out.filter(d => !desde || d>=desde);
+}
+function montoYanga(){ return D.yanga==='custom' ? Number(D.yangaCustom)||0 : YANGA[D.yanga].m; }
+function calcular(){
+  const f0=parse(D.fechaSaldo), ini=lunes(f0); const semanas=[]; let saldo=Number(D.saldo)||0;
+  for(let i=0;i<13;i++){
+    const a=addDias(ini,7*i), b=addDias(a,6), desde = i===0? f0 : a; const k=iso(a);
+    const ov=D.semanas[k]||{};
+    const motopro = ov.motopro ?? Number(D.motoproSemanal);
+    const limon = ov.limon ?? Number(D.limonSemanal);
+    const otras = ov.otras ?? 0;
+    const ent=[{n:'Moto Pro al banco',m:motopro,k:'motopro'},{n:'Limón facturado y cobrado',m:limon,k:'limon'},{n:'Otras entradas',m:otras,k:'otras'}];
+    D.cobros.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:Number(c.monto),f:d}); });
+    const sal=[];
+    D.recurrentes.forEach(r=>ocurrenciasRecurrente(r,desde,b).forEach(d=>sal.push({n:r.nombre,m:Number(r.monto),f:d})));
+    D.puntuales.forEach(p=>{ const d=parse(p.fecha); if(d>=desde&&d<=b) sal.push({n:p.nombre,m:p.yanga?montoYanga():Number(p.monto),f:d,hip:p.hip}); });
+    const tE=ent.reduce((s,x)=>s+x.m,0), tS=sal.reduce((s,x)=>s+x.m,0);
+    saldo+=tE-tS; semanas.push({i,a,b,k,ent,sal,tE,tS,saldo});
+  }
+  return semanas;
+}
+
+// ---------- Render ----------
+function render(){
+  const S=calcular(); const min=S.reduce((m,s)=>s.saldo<m.saldo?s:m,S[0]);
+  const colchon=Number(D.colchon)||0; const puede=min.saldo-colchon;
+  // Respuesta
+  const r=document.getElementById('respuesta'); r.classList.toggle('rojo',puede<0);
+  const causas=min.sal.filter(x=>x.m>=15000).map(x=>x.n.split(' ·')[0].split(' (')[0]).slice(0,3).join(', ');
+  r.innerHTML = puede>=0
+    ? `Puedes comprometer hasta <span class="monto">${fmtM(puede)}</span>sin bajar del colchón de ${fmtM(colchon)}. <small>La semana más apretada es la del ${fmtF(min.a)} (${causas||'gastos ordinarios'}): cierra en ${fmtM(min.saldo)}.</small>`
+    : `Con estos números no puedes comprometer nada. <span class="monto neg">${fmtM(min.saldo)}</span>es el saldo de la semana del ${fmtF(min.a)} (${causas}). <small>Faltan ${fmtM(-puede)} para llegar al colchón de ${fmtM(colchon)}. Cambia el escenario de Yanga, mueve un vencimiento o ajusta las entradas para ver qué lo resuelve.</small>`;
+  // Gráfica
+  renderGrafica(S,min);
+  // Escenario
+  document.getElementById('escenario').innerHTML = Object.entries(YANGA).map(([k,v])=>`<label><input type="radio" name="yanga" value="${k}" ${D.yanga===k?'checked':''} onchange="D.yanga='${k}';guardar();render()">${v.t}${v.m?` · ${fmtM(v.m)}`:''}</label>`).join('') +
+    (D.yanga==='custom'?`<label><input type="number" step="1000" value="${D.yangaCustom}" onchange="D.yangaCustom=Number(this.value);guardar();render()"></label>`:'');
+  document.getElementById('yangaNota').textContent=YANGA[D.yanga].n;
+  // Tabla
+  const tb=document.querySelector('#tabla tbody'); const abiertos=[...tb.querySelectorAll('tr.det.abierto')].map(t=>t.dataset.k);
+  tb.innerHTML=S.map(s=>`
+    <tr class="sem ${s.saldo<0?'neg':''} ${s===min?'min':''}" onclick="toggle('${s.k}')"><td>${fmtF(s.a)} – ${fmtF(s.b)}</td><td>${fmtM(s.tE)}</td><td>${fmtM(s.tS)}</td><td class="saldo">${fmtM(s.saldo)}</td></tr>
+    <tr class="det ${abiertos.includes(s.k)?'abierto':''}" data-k="${s.k}"><td colspan="4"><div class="detalle">
+      <span class="cab">Entradas</span>
+      ${s.ent.map(e=>e.k?`<span>${e.n}</span><span><input type="number" step="500" value="${e.m}" onchange="setSemana('${s.k}','${e.k}',this.value)"></span>`:`<span>${e.n}<span class="fecha">${fmtF(e.f)}</span></span><span class="ent">${fmtM(e.m)}</span>`).join('')}
+      <span class="cab">Salidas</span>
+      ${s.sal.length?s.sal.map(x=>`<span class="${x.hip?'hip':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="sal ${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join(''):'<span class="nota">Sin pagos esta semana</span><span></span>'}
+    </div></td></tr>`).join('');
+  // Listas
+  renderLista('cobros', D.cobros, c=>`
+    <label>Concepto<input class="nombre" value="${esc(c.nombre)}" onchange="upd('cobros',${c.id},'nombre',this.value)"></label>
+    <label>Monto<input type="number" step="0.01" value="${c.monto}" onchange="upd('cobros',${c.id},'monto',Number(this.value))"></label>
+    <label>Fecha esperada<input type="date" value="${c.fecha}" onchange="upd('cobros',${c.id},'fecha',this.value)"></label>`);
+  renderLista('puntuales', D.puntuales, p=>`
+    <label>Concepto<input class="nombre" value="${esc(p.nombre)}" onchange="upd('puntuales',${p.id},'nombre',this.value)"></label>
+    <label>Monto<input type="number" step="0.01" value="${p.yanga?montoYanga():p.monto}" ${p.yanga?'disabled':''} onchange="upd('puntuales',${p.id},'monto',Number(this.value))"></label>
+    <label>Fecha<input type="date" value="${p.fecha}" onchange="upd('puntuales',${p.id},'fecha',this.value)"></label>
+    <label>&nbsp;<span class="fila"><input type="checkbox" ${p.hip?'checked':''} onchange="upd('puntuales',${p.id},'hip',this.checked)"> hipotético</span></label>
+    ${etiqueta(p)}`);
+  renderLista('recurrentes', D.recurrentes, r=>`
+    <label>Concepto<input class="nombre" value="${esc(r.nombre)}" onchange="upd('recurrentes',${r.id},'nombre',this.value)"></label>
+    <label>Monto<input type="number" step="0.01" value="${r.monto}" onchange="upd('recurrentes',${r.id},'monto',Number(this.value))"></label>
+    <label>Frecuencia<select onchange="upd('recurrentes',${r.id},'tipo',this.value)">${['semanal','mensual','bimestral'].map(t=>`<option ${r.tipo===t?'selected':''}>${t}</option>`).join('')}</select></label>
+    <label>${r.tipo==='semanal'?'Día de la semana':'Día del mes'}${r.tipo==='semanal'
+      ?`<select onchange="upd('recurrentes',${r.id},'dia',Number(this.value))">${['lunes','martes','miércoles','jueves','viernes','sábado','domingo'].map((n,i)=>`<option value="${i+1}" ${Number(r.dia)===i+1?'selected':''}>${n}</option>`).join('')}</select>`
+      :`<input type="number" min="1" max="31" value="${r.dia}" onchange="upd('recurrentes',${r.id},'dia',Number(this.value))">`}</label>
+    ${r.tipo!=='semanal'?`<label>Desde (opcional)<input type="date" value="${r.desde||''}" onchange="upd('recurrentes',${r.id},'desde',this.value||undefined)"></label>`:''}`);
+  // Ajustes
+  document.getElementById('saldo').value=D.saldo; document.getElementById('fechaSaldo').value=D.fechaSaldo;
+  document.getElementById('colchon').value=D.colchon; document.getElementById('motopro').value=D.motoproSemanal; document.getElementById('limon').value=D.limonSemanal;
+}
+function etiqueta(p){ const f=parse(p.fecha), fin=addDias(lunes(parse(D.fechaSaldo)),13*7); if(f>=fin) return '<span class="etiq fuera">fuera del horizonte</span>'; if(f<parse(D.fechaSaldo)) return '<span class="etiq fuera">ya pasó</span>'; return p.hip?'<span class="etiq hip">hipotético</span>':'<span class="etiq">comprometido</span>'; }
+function renderLista(id, arr, tpl){ document.getElementById(id).innerHTML = arr.length? arr.map(x=>`<div class="item"><div class="campos">${tpl(x)}</div><button class="borrar chico" onclick="borrar('${id}',${x.id})" aria-label="Quitar">Quitar</button></div>`).join('') : '<div class="item nota">Nada por aquí todavía.</div>'; }
+function renderGrafica(S,min){
+  const W=720,H=220,pl=44,pr=10,pt=18,pb=30; const vals=S.map(s=>s.saldo);
+  const lo=Math.min(0,...vals), hi=Math.max(0,...vals,1); const y=v=>pt+(hi-v)/(hi-lo)*(H-pt-pb);
+  const bw=(W-pl-pr)/13; let out='';
+  const pasos=4, step=niceStep((hi-lo)/pasos); for(let v=Math.ceil(lo/step)*step; v<=hi; v+=step){ out+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="#DCE3D8"/><text x="${pl-4}" y="${y(v)+4}" text-anchor="end">${Math.round(v/1000)}k</text>`; }
+  out+=`<line x1="${pl}" x2="${W-pr}" y1="${y(0)}" y2="${y(0)}" stroke="#1B2420" stroke-width="1.5"/>`;
+  const col=Number(D.colchon)||0; if(col>lo&&col<hi) out+=`<line x1="${pl}" x2="${W-pr}" y1="${y(col)}" y2="${y(col)}" stroke="#2E6E3C" stroke-dasharray="4 4"/><text x="${W-pr}" y="${y(col)-3}" text-anchor="end" style="fill:#2E6E3C">colchón</text>`;
+  S.forEach((s,i)=>{ const x=pl+i*bw+bw*.15, w=bw*.7, top=y(Math.max(0,s.saldo)), h=Math.abs(y(s.saldo)-y(0)); const c=s.saldo<0?'#B5372A':(s.saldo<col?'#C9A24A':'#2E6E3C');
+    out+=`<rect x="${x}" y="${top}" width="${w}" height="${Math.max(h,1)}" fill="${c}" rx="2"/>`;
+    out+=`<text x="${x+w/2}" y="${H-pb+14}" text-anchor="middle">${fmtF(s.a)}</text>`;
+    if(s===min) out+=`<text class="pared" x="${x+w/2}" y="${(s.saldo<0?y(s.saldo)+12:top-5)}" text-anchor="middle">${fmtM(s.saldo)}</text>`; });
+  document.getElementById('svg').innerHTML=out;
+}
+function niceStep(x){ const p=Math.pow(10,Math.floor(Math.log10(x||1))); const r=x/p; return (r<=1?1:r<=2?2:r<=5?5:10)*p; }
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');
+
+// ---------- Acciones ----------
+function toggle(k){ document.querySelector(`tr.det[data-k="${k}"]`).classList.toggle('abierto'); }
+function setSemana(k,campo,v){ D.semanas[k]=D.semanas[k]||{}; D.semanas[k][campo]=Number(v)||0; guardar(); render(); }
+function upd(lista,id,campo,v){ const x=D[lista].find(x=>x.id===id); if(!x) return; x[campo]=v; guardar(); render(); }
+function borrar(lista,id){ D[lista]=D[lista].filter(x=>x.id!==id); guardar(); render(); }
+function agregar(lista){
+  const id=Date.now(); const hoy=iso(new Date());
+  const nuevo = lista==='cobros' ? {id,nombre:'Nueva factura',monto:0,fecha:hoy}
+    : lista==='puntuales' ? {id,nombre:'Nuevo vencimiento',monto:0,fecha:hoy,hip:true}
+    : {id,nombre:'Nuevo pago',monto:0,tipo:'mensual',dia:1};
+  D[lista].push(nuevo); guardar(); render();
+  const el=document.getElementById(lista).lastElementChild; el.scrollIntoView({block:'center'}); el.querySelector('input').focus();
+}
+['saldo','colchon','motopro','limon','fechaSaldo'].forEach(id=>document.getElementById(id).addEventListener('change',e=>{
+  const map={saldo:'saldo',colchon:'colchon',motopro:'motoproSemanal',limon:'limonSemanal',fechaSaldo:'fechaSaldo'};
+  D[map[id]] = id==='fechaSaldo'? e.target.value : Number(e.target.value); guardar(); render();
+}));
+function exportar(){ const a=document.createElement('a'); a.href='data:application/json,'+encodeURIComponent(JSON.stringify(D,null,1)); a.download=`flujo_${iso(new Date())}.json`; a.click(); }
+function importar(inp){ const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ D=JSON.parse(r.result); guardar(); render(); }catch(e){ alert('Ese archivo no es un respaldo válido.'); } }; r.readAsText(f); inp.value=''; }
+function restablecer(){ if(confirm('Se pierden tus cambios y vuelven los datos del 10 de septiembre. ¿Seguir?')){ D=JSON.parse(JSON.stringify(DEFAULT)); guardar(); render(); } }
+
+render();
+</script>
+</body>
+</html>
