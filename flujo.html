@@ -90,10 +90,6 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
 .etiq.fuera{background:#EEF0EC;color:var(--gris)}
 .etiq.auto{background:#E2ECF5;color:var(--azul)}
 .nota{color:var(--gris);font-size:.85rem}
-.escenario{display:flex;gap:6px;flex-wrap:wrap}
-.escenario label{border:1px solid var(--regla);border-radius:6px;padding:6px 10px;background:var(--blanco);display:flex;gap:6px;align-items:center;cursor:pointer}
-.escenario label:has(input:checked){border-color:var(--tinta);background:var(--tinta);color:var(--blanco)}
-.escenario input{accent-color:var(--lima)}
 .ajustes{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px}
 .ajustes label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--gris)}
 .ajustes .auto-val{font-size:.8rem;color:var(--azul)}
@@ -118,10 +114,6 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
 
   <div id="respuesta" class="respuesta"></div>
   <div class="grafica"><svg id="svg" viewBox="0 0 720 220" role="img" aria-label="Saldo proyectado por semana"></svg></div>
-
-  <h2>Escenario Yanga · cuota 2 del crédito 2700005286</h2>
-  <div class="escenario" id="escenario"></div>
-  <p class="nota" id="yangaNota"></p>
 
   <h2>Semana por semana</h2>
   <p class="nota">Toca una semana para ver el detalle y corregir las entradas de esa semana. Lo azul viene solo de las apps.</p>
@@ -174,17 +166,16 @@ const API_BIT = "https://script.google.com/macros/s/AKfycbyDQAEPlf-By1gL1RhKQkDb
 const DEFAULT = {
   v:2, saldoBBVA: 0, cajaMP: 0, incluirBolsa: true, fechaSaldo: '', colchon: 30000,
   motoproSemanal: null, limonSemanal: null, diasPago: null,
-  yanga: 'interes', yangaCustom: 150000,
   semanas: {},
   cobros: [],
   puntuales: [
-    {id:2, nombre:'Yanga 2700005286 · cuota 2 (si se difirió, pon la nueva fecha)', monto:244928.11, fecha:'2026-09-21', hip:false, yanga:true},
     {id:5, nombre:'MRM · pedido ~160k (1 mes de crédito)', monto:160000, fecha:'2026-10-12', hip:false},
     {id:4, nombre:'Refaccionaria Top Car', monto:6351, fecha:'2026-10-08', hip:false},
     {id:6, nombre:'Servicio Agrotécnico (vencida)', monto:51085.4, fecha:'2026-11-06', hip:false},
     {id:7, nombre:'Servicio La Barda Blanca (vencida)', monto:12495.65, fecha:'2026-11-06', hip:false},
     {id:8, nombre:'Reposición inventario Moto Pro', monto:80000, fecha:'2026-11-25', hip:true},
     {id:9, nombre:'Yanga 2700005642 · cuota 2', monto:609033.33, fecha:'2027-02-20', hip:false},
+    {id:20, nombre:'Yanga 2700005286 · cuota 3', monto:326578.25, fecha:'2027-05-20', hip:false},
   ],
   recurrentes: [
     {id:1, nombre:'Nómina Moto Pro', monto:4277.78, tipo:'semanal', dia:5},
@@ -201,11 +192,6 @@ const DEFAULT = {
     {id:12, nombre:'Luz Moto Pro', monto:1800, tipo:'bimestral', dia:1, desde:'2026-10-01'},
   ],
 };
-const YANGA = {
-  completa: {t:'Cuota completa', m:244928.11, n:'$156,262 de capital + $88,666 de interés, como está en la tabla de amortización.'},
-  interes:  {t:'Solo interés', m:88665.84, n:'Pagar los $88,666 de interés y diferir el capital a la cuota de mayo. Requiere acuerdo con Yanga.'},
-  custom:   {t:'Interés + capital parcial', m:null, n:'Interés más el capital que alcances. Ajusta el monto.'},
-};
 
 // ---------- Estado ----------
 const CLAVE = 'flujo_motopro_ranchos_v2', CLAVE_V1 = 'flujo_motopro_ranchos_v1';
@@ -217,11 +203,18 @@ const hoyISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTime
 function migrarV1(s){ // estado de la versión anterior
   const n = JSON.parse(JSON.stringify(DEFAULT));
   n.saldoBBVA = s.saldo||0; n.fechaSaldo = s.fechaSaldo||''; n.colchon = s.colchon??30000;
-  n.yanga = s.yanga||'interes'; n.yangaCustom = s.yangaCustom||150000; n.semanas = s.semanas||{};
+  n.semanas = s.semanas||{};
   n.cobros = s.cobros||[]; n.puntuales = s.puntuales||n.puntuales; n.recurrentes = s.recurrentes||n.recurrentes;
   return n;
 }
-function normalizar(s){ if(!s||typeof s!=='object') return null; if(s.v!==2) return migrarV1(s); return Object.assign(JSON.parse(JSON.stringify(DEFAULT)), s); }
+function normalizar(s){
+  if(!s||typeof s!=='object') return null;
+  const n = s.v!==2 ? migrarV1(s) : Object.assign(JSON.parse(JSON.stringify(DEFAULT)), s);
+  delete n.yanga; delete n.yangaCustom;
+  n.puntuales = (n.puntuales||[]).filter(p=>!p.yanga);                 // la cuota 2 de Yanga ya se pagó (sep 2026)
+  if(!n.puntuales.some(p=>p.id===20)) n.puntuales.push(DEFAULT.puntuales.find(p=>p.id===20)); // cuota 3 · 20 may 2027
+  return n;
+}
 function cacheLocal(){ try{ localStorage.setItem(CLAVE, JSON.stringify(D)); }catch(e){} }
 function toast(msg, err){ const g=document.getElementById('guardado'); g.textContent=msg; g.classList.toggle('err',!!err); g.classList.add('ver'); clearTimeout(tToast); tToast=setTimeout(()=>g.classList.remove('ver'),err?2500:900); }
 function guardar(){
@@ -315,7 +308,6 @@ function ocurrenciasRecurrente(r, a, b){
   }
   return out.filter(d => !desde || d>=desde);
 }
-function montoYanga(){ return D.yanga==='custom' ? num(D.yangaCustom) : YANGA[D.yanga].m; }
 function saldoInicial(){ return num(D.saldoBBVA)+num(D.cajaMP)+(D.incluirBolsa?saldoBolsa():0); }
 function calcular(){
   const f0=parse(D.fechaSaldo), ini=lunes(f0); const semanas=[]; let saldo=saldoInicial();
@@ -330,7 +322,7 @@ function calcular(){
     D.cobros.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:num(c.monto),f:d}); });
     const sal=[];
     D.recurrentes.forEach(r=>ocurrenciasRecurrente(r,desde,b).forEach(d=>sal.push({n:r.nombre,m:num(r.monto),f:d})));
-    D.puntuales.forEach(p=>{ const d=parse(p.fecha); if(d>=desde&&d<=b) sal.push({n:p.nombre,m:p.yanga?montoYanga():num(p.monto),f:d,hip:p.hip}); });
+    D.puntuales.forEach(p=>{ const d=parse(p.fecha); if(d>=desde&&d<=b) sal.push({n:p.nombre,m:num(p.monto),f:d,hip:p.hip}); });
     const tE=ent.reduce((s,x)=>s+x.m,0), tS=sal.reduce((s,x)=>s+x.m,0);
     saldo+=tE-tS; semanas.push({i,a,b,k,ent,sal,tE,tS,saldo});
   }
@@ -347,11 +339,8 @@ function render(){
     ? `Captura abajo el saldo de BBVA y el efectivo en caja de hoy para que la respuesta sea real. <small>Mientras tanto la proyección parte de ${fmtM(saldoInicial())} (solo la bolsa del rancho).</small>`
     : puede>=0
     ? `Puedes comprometer hasta <span class="monto">${fmtM(puede)}</span>sin bajar del colchón de ${fmtM(colchon)}. <small>La semana más apretada es la del ${fmtF(min.a)} (${causas||'gastos ordinarios'}): cierra en ${fmtM(min.saldo)}.</small>`
-    : `Con estos números no puedes comprometer nada. <span class="monto neg">${fmtM(min.saldo)}</span>es el saldo de la semana del ${fmtF(min.a)} (${causas}). <small>Faltan ${fmtM(-puede)} para llegar al colchón de ${fmtM(colchon)}. Cambia el escenario de Yanga, mueve un vencimiento o ajusta las entradas para ver qué lo resuelve.</small>`;
+    : `Con estos números no puedes comprometer nada. <span class="monto neg">${fmtM(min.saldo)}</span>es el saldo de la semana del ${fmtF(min.a)} (${causas}). <small>Faltan ${fmtM(-puede)} para llegar al colchón de ${fmtM(colchon)}. Mueve un vencimiento, márcalo como hipotético o ajusta las entradas para ver qué lo resuelve.</small>`;
   renderGrafica(S,min);
-  document.getElementById('escenario').innerHTML = Object.entries(YANGA).map(([k,v])=>`<label><input type="radio" name="yanga" value="${k}" ${D.yanga===k?'checked':''} onchange="D.yanga='${k}';guardar();render()">${v.t}${v.m?` · ${fmtM(v.m)}`:''}</label>`).join('') +
-    (D.yanga==='custom'?`<label><input type="number" step="1000" value="${D.yangaCustom}" onchange="D.yangaCustom=Number(this.value);guardar();render()"></label>`:'');
-  document.getElementById('yangaNota').textContent=YANGA[D.yanga].n;
   const tb=document.querySelector('#tabla tbody'); const abiertos=[...tb.querySelectorAll('tr.det.abierto')].map(t=>t.dataset.k);
   tb.innerHTML=S.map(s=>`
     <tr class="sem ${s.saldo<0?'neg':''} ${s===min?'min':''}" onclick="toggle('${s.k}')"><td>${fmtF(s.a)} – ${fmtF(s.b)}</td><td>${fmtM(s.tE)}</td><td>${fmtM(s.tS)}</td><td class="saldo">${fmtM(s.saldo)}</td></tr>
@@ -370,7 +359,7 @@ function render(){
     <label>Fecha esperada<input type="date" value="${c.fecha}" onchange="upd('cobros',${c.id},'fecha',this.value)"></label>`);
   renderLista('puntuales', D.puntuales, p=>`
     <label>Concepto<input class="nombre" value="${esc(p.nombre)}" onchange="upd('puntuales',${p.id},'nombre',this.value)"></label>
-    <label>Monto<input type="number" step="0.01" value="${p.yanga?montoYanga():p.monto}" ${p.yanga?'disabled':''} onchange="upd('puntuales',${p.id},'monto',Number(this.value))"></label>
+    <label>Monto<input type="number" step="0.01" value="${p.monto}" onchange="upd('puntuales',${p.id},'monto',Number(this.value))"></label>
     <label>Fecha<input type="date" value="${p.fecha}" onchange="upd('puntuales',${p.id},'fecha',this.value)"></label>
     <label>&nbsp;<span class="fila"><input type="checkbox" ${p.hip?'checked':''} onchange="upd('puntuales',${p.id},'hip',this.checked)"> hipotético</span></label>
     ${etiqueta(p)}`);
