@@ -116,7 +116,7 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
   <div class="grafica"><svg id="svg" viewBox="0 0 720 220" role="img" aria-label="Saldo proyectado por semana"></svg></div>
 
   <h2>Semana por semana</h2>
-  <p class="nota">Toca una semana para ver el detalle y corregir las entradas de esa semana. Lo azul viene solo de las apps.</p>
+  <p class="nota">Toca una semana para ver el detalle y corregir las entradas de esa semana. Lo azul viene solo de las apps; escribe encima para forzar un dato de esa semana.</p>
   <table id="tabla"><thead><tr><th>Semana</th><th>Entra</th><th>Sale</th><th>Saldo</th></tr></thead><tbody></tbody></table>
 
   <h2>Cobros pendientes de limón</h2>
@@ -125,6 +125,16 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
   <p class="nota" style="margin-top:12px">Otros cobros que esperes (no vienen de la bitácora):</p>
   <div class="lista" id="cobros"></div>
   <div class="acciones"><button class="chico" onclick="agregar('cobros')">Agregar cobro</button></div>
+
+  <h2>Préstamos de Bellíssima y Moto Pro al rancho</h2>
+  <p class="nota">Los cortes y rayas del rancho se pagan en efectivo desde la bolsa, y la bolsa se rellena con préstamos. Todo esto se lee solo de la bolsa del rancho.</p>
+  <div class="lista" id="prestamos"></div>
+  <div class="ajustes" style="margin-top:12px">
+    <label>Devolver por mes<input type="number" id="devMensual" step="1000" placeholder="0 = sin plan"></label>
+    <label>Día del mes<input type="number" id="devDia" min="1" max="31"></label>
+    <label>Desde<input type="date" id="devDesde"></label>
+    <label>&nbsp;<span class="fila"><input type="checkbox" id="conPrestamos"> Bellíssima y Moto Pro siguen prestando</span></label>
+  </div>
 
   <h2>Vencimientos con fecha</h2>
   <p class="nota">Pagos únicos. Marca como hipotético lo que aún no es compromiso para ver cómo movería el mínimo. Lo que ya pasó no cuenta; quítalo cuando lo pagues.</p>
@@ -166,6 +176,7 @@ const API_BIT = "https://script.google.com/macros/s/AKfycbyDQAEPlf-By1gL1RhKQkDb
 const DEFAULT = {
   v:2, saldoBBVA: 0, cajaMP: 0, incluirBolsa: true, fechaSaldo: '', colchon: 30000,
   motoproSemanal: null, limonSemanal: null, diasPago: null,
+  conPrestamos: true, devolucion: {mensual:0, dia:15, desde:'2027-02-15'},
   semanas: {},
   cobros: [],
   puntuales: [
@@ -267,6 +278,26 @@ async function cargarVivo(){
 }
 async function recargarTodo(){ ['stMP','stLim','stBolsa'].forEach(id=>setEstado(id,'cargando','Cargando…')); await cargarVivo(); render(); }
 function saldoBolsa(){ if(!LIVE.bolsa) return 0; return LIVE.bolsa.reduce((s,m)=>{ const v=num(m.importe); return s + (m.tipo==='salida'?-v:(m.tipo==='entrada'||m.tipo==='inicial')?v:0); },0); }
+const sinAcentos = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function origenPrestamo(m){ const c=sinAcentos(m.concepto); if(!/prestamo/.test(c)) return null; if(/bell/.test(c)) return 'bell'; if(/moto/.test(c)) return 'moto'; return 'otro'; }
+function esDevolucion(m){ const c=sinAcentos(m.concepto); return m.tipo==='salida' && /devoluc|pago a bell|pago a moto|regres/.test(c) && /bell|moto/.test(c); }
+function bolsaStats(){ // acumulados y promedios semanales (últimas 8 semanas) de la bolsa del rancho
+  const z={bell:0,moto:0,otro:0,devBell:0,devMoto:0,semPrest:null,semSal:null,semEnt:null};
+  if(!LIVE.bolsa) return z;
+  LIVE.bolsa.forEach(m=>{ const v=num(m.importe);
+    if(m.tipo==='entrada'){ const o=origenPrestamo(m); if(o) z[o]+=v; }
+    if(esDevolucion(m)){ if(/bell/.test(sinAcentos(m.concepto))) z.devBell+=v; else z.devMoto+=v; } });
+  const conFecha = LIVE.bolsa.filter(m=>m.fecha);
+  z.semPrest = promedioSemanal(conFecha.filter(m=>m.tipo==='entrada'&&origenPrestamo(m)), m=>m.fecha, m=>num(m.importe));
+  z.semEnt   = promedioSemanal(conFecha.filter(m=>m.tipo==='entrada'&&!origenPrestamo(m)), m=>m.fecha, m=>num(m.importe));
+  z.semSal   = promedioSemanal(conFecha.filter(m=>m.tipo==='salida'&&!esDevolucion(m)), m=>m.fecha, m=>num(m.importe));
+  z.deudaBell = z.bell - z.devBell; z.deudaMoto = z.moto - z.devMoto; z.deuda = z.deudaBell + z.deudaMoto + z.otro;
+  return z;
+}
+function devolucionesEn(a,b,deudaRestante){ // pagos del plan de devolución dentro de [a,b]
+  const d=D.devolucion||{}; const mensual=num(d.mensual); if(mensual<=0||deudaRestante<=0) return [];
+  return ocurrenciasRecurrente({tipo:'mensual',dia:d.dia||15,desde:d.desde||''},a,b).map(f=>({n:'Devolución a Bellíssima / Moto Pro',m:Math.min(mensual,deudaRestante),f}));
+}
 function bancoDeCorte(c){ // lo que llega a BBVA de un corte: depósito de efectivo (o el efectivo si no se capturó) + tarjetas + transferencias
   const dep = (c.deposito_efectivo!==''&&c.deposito_efectivo!==null&&c.deposito_efectivo!==undefined) ? num(c.deposito_efectivo) : num(c.efectivo);
   return dep + num(c.debito) + num(c.credito) + num(c.transferencia);
@@ -313,14 +344,19 @@ function calcular(){
   const f0=parse(D.fechaSaldo), ini=lunes(f0); const semanas=[]; let saldo=saldoInicial();
   const autos=cobrosAuto(), dp=diasPago(), mp=mpSem(), lim=limSem();
   const limDesde = addDias(f0, dp); // el limón "nuevo" empieza a cobrarse después del plazo de pago
+  const bs=bolsaStats(); let deudaRest=bs.deuda;
   for(let i=0;i<13;i++){
     const a=addDias(ini,7*i), b=addDias(a,6), desde = i===0? f0 : a; const k=iso(a); const ov=D.semanas[k]||{};
     const limDefault = b<limDesde ? 0 : (a<limDesde ? Math.round(lim*((b-limDesde)/86400000+1)/7) : lim);
     const motopro = ov.motopro ?? mp, limon = ov.limon ?? limDefault, otras = ov.otras ?? 0;
-    const ent=[{n:'Moto Pro al banco',m:motopro,k:'motopro',auto:ov.motopro==null},{n:'Limón nuevo (facturado y cobrado)',m:limon,k:'limon',auto:ov.limon==null},{n:'Otras entradas',m:otras,k:'otras'}];
+    const prest = ov.prestamo ?? (D.conPrestamos ? (bs.semPrest||0) : 0), bolsaEnt = ov.bolsaEnt ?? (bs.semEnt||0), bolsaSal = ov.bolsaSal ?? (bs.semSal||0);
+    const ent=[{n:'Moto Pro al banco',m:motopro,k:'motopro',auto:ov.motopro==null},{n:'Limón nuevo (facturado y cobrado)',m:limon,k:'limon',auto:ov.limon==null},
+      {n:'Préstamos de Bellíssima / Moto Pro a la bolsa',m:prest,k:'prestamo',auto:ov.prestamo==null},{n:'Ventas en efectivo del rancho (bolsa)',m:bolsaEnt,k:'bolsaEnt',auto:ov.bolsaEnt==null},
+      {n:'Otras entradas',m:otras,k:'otras'}];
     autos.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:c.monto,f:d,auto:true}); });
     D.cobros.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:num(c.monto),f:d}); });
-    const sal=[];
+    const sal=[{n:'Cortes, rayas y gastos en efectivo del rancho',m:bolsaSal,k:'bolsaSal',auto:ov.bolsaSal==null}];
+    devolucionesEn(desde,b,deudaRest).forEach(x=>{ sal.push(x); deudaRest-=x.m; });
     D.recurrentes.forEach(r=>ocurrenciasRecurrente(r,desde,b).forEach(d=>sal.push({n:r.nombre,m:num(r.monto),f:d})));
     D.puntuales.forEach(p=>{ const d=parse(p.fecha); if(d>=desde&&d<=b) sal.push({n:p.nombre,m:num(p.monto),f:d,hip:p.hip}); });
     const tE=ent.reduce((s,x)=>s+x.m,0), tS=sal.reduce((s,x)=>s+x.m,0);
@@ -348,7 +384,7 @@ function render(){
       <span class="cab">Entradas</span>
       ${s.ent.map(e=>e.k?`<span class="${e.auto?'auto':''}">${e.n}${e.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${e.m}" onchange="setSemana('${s.k}','${e.k}',this.value)"></span>`:`<span class="${e.auto?'auto':''}">${e.n}<span class="fecha">${fmtF(e.f)}${e.auto?' · bitácora':''}</span></span><span class="ent">${fmtM(e.m)}</span>`).join('')}
       <span class="cab">Salidas</span>
-      ${s.sal.length?s.sal.map(x=>`<span class="${x.hip?'hip':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join(''):'<span class="nota">Sin pagos esta semana</span><span></span>'}
+      ${s.sal.map(x=>x.k?`<span class="${x.auto?'auto':''}">${x.n}${x.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${x.m}" onchange="setSemana('${s.k}','${x.k}',this.value)"></span>`:`<span class="${x.hip?'hip':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join('')}
     </div></td></tr>`).join('');
   // Cobros automáticos
   const autos=cobrosAuto();
@@ -371,8 +407,17 @@ function render(){
       ?`<select onchange="upd('recurrentes',${r.id},'dia',Number(this.value))">${['lunes','martes','miércoles','jueves','viernes','sábado','domingo'].map((n,i)=>`<option value="${i+1}" ${Number(r.dia)===i+1?'selected':''}>${n}</option>`).join('')}</select>`
       :`<input type="number" min="1" max="31" value="${r.dia}" onchange="upd('recurrentes',${r.id},'dia',Number(this.value))">`}</label>
     ${r.tipo!=='semanal'?`<label>Desde (opcional)<input type="date" value="${r.desde||''}" onchange="upd('recurrentes',${r.id},'desde',this.value||undefined)"></label>`:''}`);
+  // Préstamos a la bolsa
+  const bs=bolsaStats(); const dev=D.devolucion||{};
+  const meses = num(dev.mensual)>0 ? Math.ceil(bs.deuda/num(dev.mensual)) : 0;
+  document.getElementById('prestamos').innerHTML = LIVE.bolsa ? `
+    <div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(bs.deuda)}</b> debe el rancho hoy<span class="fecha">Bellíssima ${fmtM(bs.deudaBell)} · Moto Pro ${fmtM(bs.deudaMoto)}${bs.otro?` · otros ${fmtM(bs.otro)}`:''}${(bs.devBell+bs.devMoto)?` · ya devuelto ${fmtM(bs.devBell+bs.devMoto)}`:''}</span></span></div><span class="etiq auto">bolsa</span></div>
+    <div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(bs.semPrest||0)}</b> por semana entran de préstamos · <b>${fmtM(bs.semSal||0)}</b> por semana salen en cortes, rayas y gastos<span class="fecha">promedio de las últimas 8 semanas; ${D.conPrestamos?'el flujo asume que siguen prestando a este ritmo':'el flujo asume que YA NO prestan: el rancho paga sus cortes desde el banco'}</span></span></div><span class="etiq auto">bolsa</span></div>
+    <div class="item"><div class="campos"><span class="txt">${num(dev.mensual)>0?`Plan: <b>${fmtM(dev.mensual)}</b> al mes desde el ${dev.desde||'—'} → liquidas en ${meses} ${meses===1?'mes':'meses'}`:'Sin plan de devolución: la deuda no aparece como pago. Pon un monto mensual para verla en el flujo.'}<span class="fecha">para liquidar en 6 meses harían falta ${fmtM(bs.deuda/6)} al mes</span></span></div></div>`
+    : '<div class="item nota">Sin conexión con la bolsa del rancho. Toca "Actualizar".</div>';
   // Ajustes
   const g=id=>document.getElementById(id);
+  g('devMensual').value=num(dev.mensual)||''; g('devDia').value=dev.dia||15; g('devDesde').value=dev.desde||''; g('conPrestamos').checked=D.conPrestamos!==false;
   g('saldoBBVA').value=D.saldoBBVA||''; g('cajaMP').value=D.cajaMP||''; g('incluirBolsa').checked=!!D.incluirBolsa; g('fechaSaldo').value=D.fechaSaldo; g('colchon').value=D.colchon;
   g('motopro').value=D.motoproSemanal??''; g('limon').value=D.limonSemanal??''; g('diasPago').value=D.diasPago??'';
   g('bolsaVal').textContent = LIVE.bolsa ? fmtM(saldoBolsa())+' hoy' : 'sin conexión';
@@ -411,6 +456,8 @@ function agregar(lista){
 [['saldoBBVA','saldoBBVA',1],['cajaMP','cajaMP',1],['colchon','colchon',1],['fechaSaldo','fechaSaldo',0],['motopro','motoproSemanal',2],['limon','limonSemanal',2],['diasPago','diasPago',2]].forEach(([id,campo,tipo])=>
   document.getElementById(id).addEventListener('change',e=>{ const v=e.target.value; D[campo] = tipo===0 ? v : (tipo===2 && v==='') ? null : Number(v); guardar(); render(); }));
 document.getElementById('incluirBolsa').addEventListener('change',e=>{ D.incluirBolsa=e.target.checked; guardar(); render(); });
+document.getElementById('conPrestamos').addEventListener('change',e=>{ D.conPrestamos=e.target.checked; guardar(); render(); });
+[['devMensual','mensual',1],['devDia','dia',1],['devDesde','desde',0]].forEach(([id,campo,n])=>document.getElementById(id).addEventListener('change',e=>{ D.devolucion=D.devolucion||{}; D.devolucion[campo]= n? Number(e.target.value): e.target.value; guardar(); render(); }));
 function exportar(){ const a=document.createElement('a'); a.href='data:application/json,'+encodeURIComponent(JSON.stringify(D,null,1)); a.download=`flujo_${hoyISO()}.json`; a.click(); }
 function importar(inp){ const f=inp.files[0]; if(!f) return; const r=new FileReader(); r.onload=()=>{ try{ const s=normalizar(JSON.parse(r.result)); if(!s) throw 0; D=s; guardar(); render(); }catch(e){ alert('Ese archivo no es un respaldo válido.'); } }; r.readAsText(f); inp.value=''; }
 function restablecer(){ if(confirm('Se pierden tus cambios (también en la nube) y vuelven los datos iniciales. ¿Seguir?')){ D=JSON.parse(JSON.stringify(DEFAULT)); D.fechaSaldo=hoyISO(); guardar(); render(); } }
