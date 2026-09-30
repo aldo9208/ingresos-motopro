@@ -51,6 +51,8 @@ const TABS=[
    help:'Cruza el banco contra tus CFDIs de Siigo: te dice qué gasto tiene factura, qué IVA se acredita y qué REP falta. No genera póliza, verifica.'},
   {id:'admin',    label:'📊 Admin',                 src:'admin_motopro.html',
    help:'Conciliación administrativa de Moto Pro.'},
+  {id:'flujo',    label:'💧 Flujo de efectivo',     src:'flujo.html',
+   help:'Proyección a 13 semanas de Moto Pro y Ranchos con el dinero real. Te dice cuánto puedes comprometer hoy sin quedarte sin efectivo. Lee ventas, cobros de limón y bolsa del rancho directo de las apps.'},
 ];
 const nav=document.getElementById('nav'), frame=document.getElementById('frame'), help=document.getElementById('help');
 let actual=localStorage.getItem('cont_tab')||'banco';
