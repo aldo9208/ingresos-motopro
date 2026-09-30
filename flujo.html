@@ -108,6 +108,7 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
     <span id="stMP" class="cargando">Ventas Moto Pro</span>
     <span id="stLim" class="cargando">Limón</span>
     <span id="stBolsa" class="cargando">Bolsa rancho</span>
+    <span id="stGastos" class="cargando">Combustible y agro</span>
     <span id="stNube" class="cargando">Nube</span>
     <button class="chico quieto" onclick="recargarTodo()">Actualizar</button>
   </div>
@@ -134,6 +135,13 @@ tr.det td{padding:4px 8px 14px;background:#FAFBF9}
     <label>Día del mes<input type="number" id="devDia" min="1" max="31"></label>
     <label>Desde<input type="date" id="devDesde"></label>
     <label>&nbsp;<span class="fila"><input type="checkbox" id="conPrestamos"> Bellíssima y Moto Pro siguen prestando</span></label>
+  </div>
+
+  <h2>Combustible y agroquímicos del rancho</h2>
+  <p class="nota">Cargas de combustible y facturas de agroquímicos registradas en la bitácora. El combustible entra como gasto semanal; lo que está sin pagar entra como vencimiento en la fecha que elijas.</p>
+  <div class="lista" id="gastosRancho"></div>
+  <div class="ajustes" style="margin-top:12px">
+    <label>Pagar lo atrasado de la bitácora el<input type="date" id="fechaAtrasados"></label>
   </div>
 
   <h2>Vencimientos con fecha</h2>
@@ -176,14 +184,13 @@ const API_BIT = "https://script.google.com/macros/s/AKfycbyDQAEPlf-By1gL1RhKQkDb
 const DEFAULT = {
   v:2, saldoBBVA: 0, cajaMP: 0, incluirBolsa: true, fechaSaldo: '', colchon: 30000,
   motoproSemanal: null, limonSemanal: null, diasPago: null,
-  conPrestamos: true, devolucion: {mensual:0, dia:15, desde:'2027-02-15'},
+  conPrestamos: true, devolucion: {mensual:0, dia:15, desde:'2027-02-15'}, fechaAtrasados: '2026-11-06',
   semanas: {},
   cobros: [],
   puntuales: [
     {id:5, nombre:'MRM · pedido ~160k (1 mes de crédito)', monto:160000, fecha:'2026-10-12', hip:false},
     {id:4, nombre:'Refaccionaria Top Car', monto:6351, fecha:'2026-10-08', hip:false},
     {id:6, nombre:'Servicio Agrotécnico (vencida)', monto:51085.4, fecha:'2026-11-06', hip:false},
-    {id:7, nombre:'Servicio La Barda Blanca (vencida)', monto:12495.65, fecha:'2026-11-06', hip:false},
     {id:8, nombre:'Reposición inventario Moto Pro', monto:80000, fecha:'2026-11-25', hip:true},
     {id:9, nombre:'Yanga 2700005642 · cuota 2', monto:609033.33, fecha:'2027-02-20', hip:false},
     {id:20, nombre:'Yanga 2700005286 · cuota 3', monto:326578.25, fecha:'2027-05-20', hip:false},
@@ -191,7 +198,6 @@ const DEFAULT = {
   recurrentes: [
     {id:1, nombre:'Nómina Moto Pro', monto:4277.78, tipo:'semanal', dia:5},
     {id:2, nombre:'Nómina rancho (Gonzalo)', monto:2381.04, tipo:'semanal', dia:5},
-    {id:3, nombre:'Combustible Barda Blanca', monto:2300, tipo:'semanal', dia:5},
     {id:4, nombre:'Compras menores Moto Pro', monto:5000, tipo:'semanal', dia:3},
     {id:5, nombre:'Renta local Moto Pro', monto:20880, tipo:'mensual', dia:15},
     {id:6, nombre:'Telmex Moto Pro', monto:549, tipo:'mensual', dia:5},
@@ -207,7 +213,7 @@ const DEFAULT = {
 // ---------- Estado ----------
 const CLAVE = 'flujo_motopro_ranchos_v2', CLAVE_V1 = 'flujo_motopro_ranchos_v1';
 let D = JSON.parse(JSON.stringify(DEFAULT));
-let LIVE = { cortes:null, limon:null, bolsa:null };   // datos crudos de las apps
+let LIVE = { cortes:null, limon:null, bolsa:null, cargas:null, agro:null };   // datos crudos de las apps
 let nubeOK = false, tGuardar, tToast;
 const hoyISO = () => { const d=new Date(); d.setMinutes(d.getMinutes()-d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
 
@@ -224,6 +230,8 @@ function normalizar(s){
   delete n.yanga; delete n.yangaCustom;
   n.puntuales = (n.puntuales||[]).filter(p=>!p.yanga);                 // la cuota 2 de Yanga ya se pagó (sep 2026)
   if(!n.puntuales.some(p=>p.id===20)) n.puntuales.push(DEFAULT.puntuales.find(p=>p.id===20)); // cuota 3 · 20 may 2027
+  n.puntuales = n.puntuales.filter(p=>p.id!==7);                        // Barda Blanca ahora sale de la bitácora
+  n.recurrentes = (n.recurrentes||[]).filter(r=>r.id!==3);               // combustible ahora sale de la bitácora
   return n;
 }
 function cacheLocal(){ try{ localStorage.setItem(CLAVE, JSON.stringify(D)); }catch(e){} }
@@ -273,10 +281,13 @@ async function cargarVivo(){
     getJSON(API_MP+'?action=obtener_cortes').then(j=>{ if(!j.ok) throw 0; LIVE.cortes=j.cortes||[]; setEstado('stMP','ok',`Ventas Moto Pro · ${LIVE.cortes.length} cortes`); }).catch(()=>setEstado('stMP','err','Ventas Moto Pro · sin conexión')),
     getJSON(API_BIT+'?accion=obtener_ventas_limon').then(j=>{ LIVE.limon=j.ventas||[]; setEstado('stLim','ok',`Limón · ${fmtM(j.totalPorCobrar||0)} por cobrar`); }).catch(()=>setEstado('stLim','err','Limón · sin conexión')),
     getJSON(API_MP+'?action=bolsa_movs&bolsa=rancho').then(j=>{ if(!j.ok) throw 0; LIVE.bolsa=j.movs||[]; setEstado('stBolsa','ok',`Bolsa rancho · ${fmtM(saldoBolsa())}`); }).catch(()=>setEstado('stBolsa','err','Bolsa rancho · sin conexión')),
+    Promise.all([getJSON(API_BIT+'?accion=obtener_cargas_pendientes'), getJSON(API_BIT+'?accion=obtener_cargas_contabilizadas'), getJSON(API_BIT+'?accion=facturas_agro_por_pagar')])
+      .then(([p,c,a])=>{ LIVE.cargas=[...(p.cargas||[]),...(c.cargas||[])]; LIVE.agro=a.facturas||[]; const g=gastosStats(); setEstado('stGastos','ok',`Combustible ${fmtM(g.semComb||0)}/sem · sin pagar ${fmtM(g.combSinPagar+g.agroTotal)}`); })
+      .catch(()=>setEstado('stGastos','err','Combustible y agro · sin conexión')),
   ];
   await Promise.all(t);
 }
-async function recargarTodo(){ ['stMP','stLim','stBolsa'].forEach(id=>setEstado(id,'cargando','Cargando…')); await cargarVivo(); render(); }
+async function recargarTodo(){ ['stMP','stLim','stBolsa','stGastos'].forEach(id=>setEstado(id,'cargando','Cargando…')); await cargarVivo(); render(); }
 function saldoBolsa(){ if(!LIVE.bolsa) return 0; return LIVE.bolsa.reduce((s,m)=>{ const v=num(m.importe); return s + (m.tipo==='salida'?-v:(m.tipo==='entrada'||m.tipo==='inicial')?v:0); },0); }
 const sinAcentos = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
 function origenPrestamo(m){ const c=sinAcentos(m.concepto); if(!/prestamo/.test(c)) return null; if(/bell/.test(c)) return 'bell'; if(/moto/.test(c)) return 'moto'; return 'otro'; }
@@ -297,6 +308,21 @@ function bolsaStats(){ // acumulados y promedios semanales (últimas 8 semanas) 
 function devolucionesEn(a,b,deudaRestante){ // pagos del plan de devolución dentro de [a,b]
   const d=D.devolucion||{}; const mensual=num(d.mensual); if(mensual<=0||deudaRestante<=0) return [];
   return ocurrenciasRecurrente({tipo:'mensual',dia:d.dia||15,desde:d.desde||''},a,b).map(f=>({n:'Devolución a Bellíssima / Moto Pro',m:Math.min(mensual,deudaRestante),f}));
+}
+function gastosStats(){ // combustible y agroquímicos según la bitácora
+  const z={semComb:null,combSinPagar:0,nCargasSinPagar:0,agroTotal:0,agro:[]};
+  if(LIVE.cargas){
+    z.semComb = promedioSemanal(LIVE.cargas.filter(c=>c.fecha), c=>String(c.fecha).slice(0,10), c=>num(c.total));
+    LIVE.cargas.forEach(c=>{ if(!c.fecha_pago){ z.combSinPagar+=num(c.total); z.nCargasSinPagar++; } });
+  }
+  if(LIVE.agro){ z.agro=LIVE.agro.map(f=>({proveedor:f.proveedor,folio:f.folio,fecha:String(f.fecha||'').slice(0,10),total:num(f.total)})); z.agroTotal=z.agro.reduce((s,f)=>s+f.total,0); }
+  return z;
+}
+function atrasadosBitacora(){ // vencimientos automáticos: lo que la bitácora dice que está sin pagar
+  const g=gastosStats(), f=D.fechaAtrasados||'2026-11-06', out=[];
+  if(g.combSinPagar>0) out.push({n:`Combustible Barda Blanca sin pagar (${g.nCargasSinPagar} cargas · bitácora)`,m:g.combSinPagar,fecha:f,auto:true});
+  g.agro.forEach(a=>out.push({n:`${a.proveedor} F/${a.folio} (bitácora)`,m:a.total,fecha:f,auto:true}));
+  return out;
 }
 function bancoDeCorte(c){ // lo que llega a BBVA de un corte: depósito de efectivo (o el efectivo si no se capturó) + tarjetas + transferencias
   const dep = (c.deposito_efectivo!==''&&c.deposito_efectivo!==null&&c.deposito_efectivo!==undefined) ? num(c.deposito_efectivo) : num(c.efectivo);
@@ -344,7 +370,7 @@ function calcular(){
   const f0=parse(D.fechaSaldo), ini=lunes(f0); const semanas=[]; let saldo=saldoInicial();
   const autos=cobrosAuto(), dp=diasPago(), mp=mpSem(), lim=limSem();
   const limDesde = addDias(f0, dp); // el limón "nuevo" empieza a cobrarse después del plazo de pago
-  const bs=bolsaStats(); let deudaRest=bs.deuda;
+  const bs=bolsaStats(); let deudaRest=bs.deuda; const gs=gastosStats(), atrasados=atrasadosBitacora();
   for(let i=0;i<13;i++){
     const a=addDias(ini,7*i), b=addDias(a,6), desde = i===0? f0 : a; const k=iso(a); const ov=D.semanas[k]||{};
     const limDefault = b<limDesde ? 0 : (a<limDesde ? Math.round(lim*((b-limDesde)/86400000+1)/7) : lim);
@@ -355,7 +381,9 @@ function calcular(){
       {n:'Otras entradas',m:otras,k:'otras'}];
     autos.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:c.monto,f:d,auto:true}); });
     D.cobros.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:num(c.monto),f:d}); });
-    const sal=[{n:'Cortes, rayas y gastos en efectivo del rancho',m:bolsaSal,k:'bolsaSal',auto:ov.bolsaSal==null}];
+    const comb = ov.comb ?? (gs.semComb||0);
+    const sal=[{n:'Cortes, rayas y gastos en efectivo del rancho',m:bolsaSal,k:'bolsaSal',auto:ov.bolsaSal==null},{n:'Combustible del rancho (bitácora)',m:comb,k:'comb',auto:ov.comb==null}];
+    atrasados.forEach(x=>{ const d=parse(x.fecha); if(d>=desde&&d<=b) sal.push({n:x.n,m:x.m,f:d,auto:true}); });
     devolucionesEn(desde,b,deudaRest).forEach(x=>{ sal.push(x); deudaRest-=x.m; });
     D.recurrentes.forEach(r=>ocurrenciasRecurrente(r,desde,b).forEach(d=>sal.push({n:r.nombre,m:num(r.monto),f:d})));
     D.puntuales.forEach(p=>{ const d=parse(p.fecha); if(d>=desde&&d<=b) sal.push({n:p.nombre,m:num(p.monto),f:d,hip:p.hip}); });
@@ -384,7 +412,7 @@ function render(){
       <span class="cab">Entradas</span>
       ${s.ent.map(e=>e.k?`<span class="${e.auto?'auto':''}">${e.n}${e.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${e.m}" onchange="setSemana('${s.k}','${e.k}',this.value)"></span>`:`<span class="${e.auto?'auto':''}">${e.n}<span class="fecha">${fmtF(e.f)}${e.auto?' · bitácora':''}</span></span><span class="ent">${fmtM(e.m)}</span>`).join('')}
       <span class="cab">Salidas</span>
-      ${s.sal.map(x=>x.k?`<span class="${x.auto?'auto':''}">${x.n}${x.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${x.m}" onchange="setSemana('${s.k}','${x.k}',this.value)"></span>`:`<span class="${x.hip?'hip':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join('')}
+      ${s.sal.map(x=>x.k?`<span class="${x.auto?'auto':''}">${x.n}${x.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${x.m}" onchange="setSemana('${s.k}','${x.k}',this.value)"></span>`:`<span class="${x.hip?'hip':x.auto?'auto':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join('')}
     </div></td></tr>`).join('');
   // Cobros automáticos
   const autos=cobrosAuto();
@@ -415,8 +443,16 @@ function render(){
     <div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(bs.semPrest||0)}</b> por semana entran de préstamos · <b>${fmtM(bs.semSal||0)}</b> por semana salen en cortes, rayas y gastos<span class="fecha">promedio de las últimas 8 semanas; ${D.conPrestamos?'el flujo asume que siguen prestando a este ritmo':'el flujo asume que YA NO prestan: el rancho paga sus cortes desde el banco'}</span></span></div><span class="etiq auto">bolsa</span></div>
     <div class="item"><div class="campos"><span class="txt">${num(dev.mensual)>0?`Plan: <b>${fmtM(dev.mensual)}</b> al mes desde el ${dev.desde||'—'} → liquidas en ${meses} ${meses===1?'mes':'meses'}`:'Sin plan de devolución: la deuda no aparece como pago. Pon un monto mensual para verla en el flujo.'}<span class="fecha">para liquidar en 6 meses harían falta ${fmtM(bs.deuda/6)} al mes</span></span></div></div>`
     : '<div class="item nota">Sin conexión con la bolsa del rancho. Toca "Actualizar".</div>';
+  // Combustible y agro
+  const gs=gastosStats(); const fA=D.fechaAtrasados||'';
+  document.getElementById('gastosRancho').innerHTML = (LIVE.cargas||LIVE.agro) ? `
+    <div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(gs.semComb||0)}</b> por semana de combustible<span class="fecha">promedio de las últimas 8 semanas de cargas; ya está dentro de cada semana del flujo</span></span></div><span class="etiq auto">bitácora</span></div>
+    <div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(gs.combSinPagar)}</b> de combustible sin pagar a Barda Blanca<span class="fecha">${gs.nCargasSinPagar} cargas sin fecha de pago · entra como vencimiento el ${fA||'—'}</span></span></div><span class="etiq auto">bitácora</span></div>
+    ${gs.agro.length ? gs.agro.map(a=>`<div class="item auto"><div class="campos"><span class="txt"><b>${fmtM(a.total)}</b> · ${esc(a.proveedor)} F/${esc(a.folio)}<span class="fecha">factura del ${a.fecha} · entra como vencimiento el ${fA||'—'}</span></span></div><span class="etiq auto">bitácora</span></div>`).join('') : '<div class="item nota">No hay facturas de agroquímicos por pagar en la bitácora.</div>'}`
+    : '<div class="item nota">Sin conexión con la bitácora. Toca "Actualizar".</div>';
   // Ajustes
   const g=id=>document.getElementById(id);
+  g('fechaAtrasados').value=fA;
   g('devMensual').value=num(dev.mensual)||''; g('devDia').value=dev.dia||15; g('devDesde').value=dev.desde||''; g('conPrestamos').checked=D.conPrestamos!==false;
   g('saldoBBVA').value=D.saldoBBVA||''; g('cajaMP').value=D.cajaMP||''; g('incluirBolsa').checked=!!D.incluirBolsa; g('fechaSaldo').value=D.fechaSaldo; g('colchon').value=D.colchon;
   g('motopro').value=D.motoproSemanal??''; g('limon').value=D.limonSemanal??''; g('diasPago').value=D.diasPago??'';
@@ -456,6 +492,7 @@ function agregar(lista){
 [['saldoBBVA','saldoBBVA',1],['cajaMP','cajaMP',1],['colchon','colchon',1],['fechaSaldo','fechaSaldo',0],['motopro','motoproSemanal',2],['limon','limonSemanal',2],['diasPago','diasPago',2]].forEach(([id,campo,tipo])=>
   document.getElementById(id).addEventListener('change',e=>{ const v=e.target.value; D[campo] = tipo===0 ? v : (tipo===2 && v==='') ? null : Number(v); guardar(); render(); }));
 document.getElementById('incluirBolsa').addEventListener('change',e=>{ D.incluirBolsa=e.target.checked; guardar(); render(); });
+document.getElementById('fechaAtrasados').addEventListener('change',e=>{ D.fechaAtrasados=e.target.value; guardar(); render(); });
 document.getElementById('conPrestamos').addEventListener('change',e=>{ D.conPrestamos=e.target.checked; guardar(); render(); });
 [['devMensual','mensual',1],['devDia','dia',1],['devDesde','desde',0]].forEach(([id,campo,n])=>document.getElementById(id).addEventListener('change',e=>{ D.devolucion=D.devolucion||{}; D.devolucion[campo]= n? Number(e.target.value): e.target.value; guardar(); render(); }));
 function exportar(){ const a=document.createElement('a'); a.href='data:application/json,'+encodeURIComponent(JSON.stringify(D,null,1)); a.download=`flujo_${hoyISO()}.json`; a.click(); }
