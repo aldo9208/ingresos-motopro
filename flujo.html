@@ -374,14 +374,16 @@ function calcular(){
   for(let i=0;i<13;i++){
     const a=addDias(ini,7*i), b=addDias(a,6), desde = i===0? f0 : a; const k=iso(a); const ov=D.semanas[k]||{};
     const limDefault = b<limDesde ? 0 : (a<limDesde ? Math.round(lim*((b-limDesde)/86400000+1)/7) : lim);
-    const motopro = ov.motopro ?? mp, limon = ov.limon ?? limDefault, otras = ov.otras ?? 0;
-    const prest = ov.prestamo ?? (D.conPrestamos ? (bs.semPrest||0) : 0), bolsaEnt = ov.bolsaEnt ?? (bs.semEnt||0), bolsaSal = ov.bolsaSal ?? (bs.semSal||0);
+    const frac = i===0 ? ((b-f0)/86400000+1)/7 : 1;   // la semana en curso solo cuenta los días que faltan
+    const pr = v => Math.round(v*frac);
+    const motopro = ov.motopro ?? pr(mp), limon = ov.limon ?? pr(limDefault), otras = ov.otras ?? 0;
+    const prest = ov.prestamo ?? (D.conPrestamos ? pr(bs.semPrest||0) : 0), bolsaEnt = ov.bolsaEnt ?? pr(bs.semEnt||0), bolsaSal = ov.bolsaSal ?? pr(bs.semSal||0);
     const ent=[{n:'Moto Pro al banco',m:motopro,k:'motopro',auto:ov.motopro==null},{n:'Limón nuevo (facturado y cobrado)',m:limon,k:'limon',auto:ov.limon==null},
       {n:'Préstamos de Bellíssima / Moto Pro a la bolsa',m:prest,k:'prestamo',auto:ov.prestamo==null},{n:'Ventas en efectivo del rancho (bolsa)',m:bolsaEnt,k:'bolsaEnt',auto:ov.bolsaEnt==null},
       {n:'Otras entradas',m:otras,k:'otras'}];
     autos.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:c.monto,f:d,auto:true}); });
     D.cobros.forEach(c=>{ const d=parse(c.fecha); if(d>=desde&&d<=b) ent.push({n:c.nombre,m:num(c.monto),f:d}); });
-    const comb = ov.comb ?? (gs.semComb||0);
+    const comb = ov.comb ?? pr(gs.semComb||0);
     const sal=[{n:'Cortes, rayas y gastos en efectivo del rancho',m:bolsaSal,k:'bolsaSal',auto:ov.bolsaSal==null},{n:'Combustible del rancho (bitácora)',m:comb,k:'comb',auto:ov.comb==null}];
     atrasados.forEach(x=>{ const d=parse(x.fecha); if(d>=desde&&d<=b) sal.push({n:x.n,m:x.m,f:d,auto:true}); });
     devolucionesEn(desde,b,deudaRest).forEach(x=>{ sal.push(x); deudaRest-=x.m; });
@@ -405,12 +407,13 @@ function render(){
     ? `Puedes comprometer hasta <span class="monto">${fmtM(puede)}</span>sin bajar del colchón de ${fmtM(colchon)}. <small>La semana más apretada es la del ${fmtF(min.a)} (${causas||'gastos ordinarios'}): cierra en ${fmtM(min.saldo)}.</small>`
     : `Con estos números no puedes comprometer nada. <span class="monto neg">${fmtM(min.saldo)}</span>es el saldo de la semana del ${fmtF(min.a)} (${causas}). <small>Faltan ${fmtM(-puede)} para llegar al colchón de ${fmtM(colchon)}. Mueve un vencimiento, márcalo como hipotético o ajusta las entradas para ver qué lo resuelve.</small>`;
   renderGrafica(S,min);
+  const frac0 = ((S[0].b-parse(D.fechaSaldo))/86400000+1)/7;
   const tb=document.querySelector('#tabla tbody'); const abiertos=[...tb.querySelectorAll('tr.det.abierto')].map(t=>t.dataset.k);
   tb.innerHTML=S.map(s=>`
     <tr class="sem ${s.saldo<0?'neg':''} ${s===min?'min':''}" onclick="toggle('${s.k}')"><td>${fmtF(s.a)} – ${fmtF(s.b)}</td><td>${fmtM(s.tE)}</td><td>${fmtM(s.tS)}</td><td class="saldo">${fmtM(s.saldo)}</td></tr>
     <tr class="det ${abiertos.includes(s.k)?'abierto':''}" data-k="${s.k}"><td colspan="4"><div class="detalle">
       <span class="cab">Entradas</span>
-      ${s.ent.map(e=>e.k?`<span class="${e.auto?'auto':''}">${e.n}${e.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${e.m}" onchange="setSemana('${s.k}','${e.k}',this.value)"></span>`:`<span class="${e.auto?'auto':''}">${e.n}<span class="fecha">${fmtF(e.f)}${e.auto?' · bitácora':''}</span></span><span class="ent">${fmtM(e.m)}</span>`).join('')}
+      ${s.ent.map(e=>e.k?`<span class="${e.auto?'auto':''}">${e.n}${e.auto?`<span class="fecha">automático${s.i===0&&frac0<1?' · solo los días que faltan de esta semana':''} · escribe para forzar</span>`:''}</span><span><input type="number" step="500" value="${e.m}" onchange="setSemana('${s.k}','${e.k}',this.value)"></span>`:`<span class="${e.auto?'auto':''}">${e.n}<span class="fecha">${fmtF(e.f)}${e.auto?' · bitácora':''}</span></span><span class="ent">${fmtM(e.m)}</span>`).join('')}
       <span class="cab">Salidas</span>
       ${s.sal.map(x=>x.k?`<span class="${x.auto?'auto':''}">${x.n}${x.auto?'<span class="fecha">automático · escribe para forzar</span>':''}</span><span><input type="number" step="500" value="${x.m}" onchange="setSemana('${s.k}','${x.k}',this.value)"></span>`:`<span class="${x.hip?'hip':x.auto?'auto':''}">${x.n}<span class="fecha">${fmtF(x.f)}${x.hip?' · hipotético':''}</span></span><span class="${x.hip?'hip':''}">${fmtM(x.m)}</span>`).join('')}
     </div></td></tr>`).join('');
